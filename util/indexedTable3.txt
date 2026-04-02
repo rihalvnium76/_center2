@@ -1,0 +1,76 @@
+IndexedTable<E extends Object|Array>
+
+struct:
+  id: NodeId uint = 2
+  
+  nodes: {[NodeId]: Node {
+    id: NodeId
+    value: E
+    prev?: Node
+    next?: Node
+  }}
+  size: uint = 0
+  head: DummyNode {id: 0, next: tail}
+  tail: DummyNode {id: 1, prev: head}
+  cachedNodeArray?: ReadonlyNode[] = null
+  cachedValueArray?: E[] = null
+
+  indexes: {[indexName: IndexName str]: {[key]: str}: Index {[NodeId]: Node}}
+
+  config: {
+    indexes: {[IndexName]: (str|number)[]}
+  }
+
+trait:
+  constuctor(#config?)
+  $deepCopy(obj: T): T
+  #$copyNode(node): ReadonlyNode? {
+    let value
+    return node ? {
+      id: node.id,
+      value: get () => value || (value = $deepCopy(node.value))
+    } : null
+  }
+
+  append(prevFilter: NodeFilter, value): ReadonlyNode
+  insert(nextFilter, value): ReadonlyNode
+  remove(filter): E? = oldValue
+  update(filter, value): E? = oldValue
+  swap(filter1, filter2): bool
+  moveUp(filter): bool
+  moveDown(filter): bool
+  get(filter): ReadonlyNode
+  list(filter): ReadonlyNode[]
+  clear()
+  size()
+  isEmpty()
+  forEach(fn: (ReadonlyNode, this) => bool, thisArg?)
+  toNodeArray(): ReadonlyNode[]
+  toValueArray(): E[]
+  #nextId()
+  #getNode(filter): Node
+  #listNodes(filter): Node[]
+
+  addIndex(indexName, columns): this
+  dropIndex(indexName): this
+  #getIndex(indexName, value): Index
+  #setIndex(indexName, node)
+  #clearIndex(indexName, node)
+  #setIndexes(node)
+  #clearIndexes(node)
+
+type:
+  NodeFilter {
+    head: true
+  } | {
+    tail: true
+  } | {
+    nodeId: NodeId
+  } | {
+    index: str
+    value: E
+  }
+
+// # private -> internal_
+// $ static
+// _ member field

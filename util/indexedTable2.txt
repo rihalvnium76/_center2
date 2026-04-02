@@ -1,0 +1,73 @@
+IndexedTable<E extends Object|Array>
+
+struct:
+  data: 
+    nodes: 
+      [nodeId]: Node
+        id?: NodeId
+        value?: E
+        prev?: Node
+        next?: Node
+        prevId?: NodeId
+        nextId?: NodeId
+    nextId: uint = 0
+    size: uint = 0
+    head?: Node
+    tail?: Node
+    cachedValues?: E[]
+  indexes:
+    [indexName]:
+      // "V" + key : values to index key
+      // "L" : last
+      ["V" + key | "L"]:
+        [nodeId]: Node
+  defs:
+    indexes:
+      [indexName]: ColumnName[]
+    deepCopy(value: E): E
+    toIndexKey(value: E): string|number
+
+trait:
+  construct({defs, values})
+  #initDefs(defs)
+  #initValues(values)
+
+  // wrap: Node {id, value, prev, next} -> Node {id, (value), prevId, nextId}
+  // unwrap: node Node {id, (value), prevId, nextId} -> data.nodes[node.id]
+  #wrap(node): Node
+
+  data:
+    append(prevNode, value): Node
+    insert(nextNode, value): Node
+    remove(node): E?
+    update(node, value): E?
+    swap(node1, node2)
+    movePrev(node): bool
+    moveNext(node): bool
+    get(nodeId): Node?
+    get(indexName, value): Node?
+    list(nodeId): Node[]
+    list(indexName, value): Node[]
+    first(): Node?
+    last(): Node?
+    clear()
+    size(): uint
+    isEmpty(): bool
+    forEach(fn: (value, nodeId, node) => bool, thisArg?)
+    toArray(): E[]
+    #clearCache()
+
+    #nextId(): NodeId
+
+  indexes:
+    add(indexName, columns): this
+    drop(indexName)
+    #list(indexName, value): {[nodeId]: Node}
+    #set(indexName, node)
+    #clear(indexName, node)
+    #setAll(node)
+    #clearAll(node)
+
+// # private -> internal_
+// $ static
+// _ member field

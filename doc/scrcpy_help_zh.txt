@@ -1,0 +1,258 @@
+scrcpy 1.19
+
+=======================================
+Usage: scrcpy [options]
+
+Options:
+
+    --always-on-top
+        使scrcpy窗口总是在顶部(在其他窗口之上)
+
+    -b, --bit-rate value
+        以给定的比特率编码视频，以bits/s表示
+        支持单位后缀: 'K' (x1000) 和 'M' (x1000000)
+        默认是8000000
+
+    --codec-options key[:type]=value[,...]
+        设置逗号分隔的key:type=value的设备编码器的选项列表。
+		“type”的可能值为“int”（默认）、“long”、“float”和“string”。
+		Android文档中提供了可能的编解码器选项列表：
+		<https://d.android.com/reference/android/media/MediaFormat>
+
+    --crop width:height:x:y
+        裁剪设备屏幕大小
+        这些值以设备的自然方向中表示(通常，手机是纵向的，平板电脑是横向的)
+        如果还指定--max-size value则在裁切后调整大小
+
+    --disable-screensaver
+        在scrcpy运行时禁用屏幕保护程序
+
+    --display id
+        指定要镜像显示的显示器ID
+
+        可用显示器ID列表由以下命令提供:
+            adb shell dumpsys display
+        (在输出中搜索"mDisplayId=")
+
+        默认为0
+
+    --display-buffer ms
+        在显示前添加缓冲延迟（以毫秒为单位）。
+        这会增加延迟以补偿抖动。
+
+        默认0 (无缓冲).
+
+    --encoder name
+        使用特定的MediaCodec编码器（必须是H.264编码器）。
+
+    --force-adb-forward
+        不要尝试使用“adb reverse”连接设备
+
+    --forward-all-clicks
+        默认情况下，右键单击触发返回键（或打开电源），中键单击触发HOME键。
+        此选项将禁用这些快捷方式，并将单击转发到设备。
+
+    -f, --fullscreen
+        以全屏启动
+
+    -h, --help
+        显示帮助
+
+    --legacy-paste
+        在Ctrl+v（如MOD+Shift+v）上将计算机剪贴板文本作为一系列按键事件插入。
+        这是针对某些设备在以编程方式设置设备剪贴板时未按预期运行的解决方法。
+
+    --lock-video-orientation[=value]
+        将视频方向锁定到值。
+        可能的值为“unlocked”、“initial”（锁定到初始方向）、0、1、2 和 3。
+        自然设备方向为 0，每个增量增加 90 度逆时针旋转。
+        默认为“unlocked”。
+        传递不带参数的选项等同于传递“initial”。
+
+    --max-fps value
+        限制屏幕捕获帧率 (仅支持Android 10即以上的设备，但可能可以在更早版本OS中使用)
+
+    -m, --max-size value
+        将宽度和高度都限制为value。
+        计算另一个维度是为了保留设备的宽高比。
+        （例如：-m 1024，1920×1080的设备将以1024×576投影）
+        默认是0 (无限制)
+
+    -n, --no-control
+        禁用设备控制 (以只读的方式投影)
+
+    -N, --no-display
+        不显示设备内容(仅屏幕录像开启时)
+
+    --no-key-repeat
+        按住某个键时不要发送重复的键事件。
+
+    --no-mipmaps
+        如果渲染器是OpenGL 3.0+或OpenGL ES 2.0+，则会自动生成mipmap以提高缩小质量。
+        此选项将禁用mipmap的生成
+
+    -p, --port port[:port]
+        设置客户端监听的TCP端口范围
+        默认为27183:27199
+
+    --prefer-text
+        将字母字符和空格注入为文本事件，而不是按键事件。
+        避免了组合多个键来输入特殊字符的问题，但打破了游戏中字母按键的预期行为(通常是WASD)
+
+    --push-target path
+        设置通过拖拽方式将文件推送到设备的目标目录
+        通过 "adb push" 的方式推送
+        默认为 "/sdcard/"
+
+    -r, --record file.mp4
+        录制屏幕到文件
+        格式由--record-format选项（如果有设置）或文件扩展名(.mp4或.mkv)设定
+
+    --record-format format
+        强制设置录像文件格式 (mp4或mkv)
+
+    --render-driver name
+		请求SDL使用给定的渲染驱动程序（这只是一个提示）
+		当前支持的名称是“ direct3d”，“ opengl”，“ opengles2”，“ opengles”，“ metal”和“ software”
+        <https://wiki.libsdl.org/SDL_HINT_RENDER_DRIVER>
+
+    --render-expired-frames
+        默认情况下，为了最小化延迟，scrcpy总是呈现最后一个可用的解码帧，并删除之前的任何帧。
+		这个标志 强制渲染所有帧 ，代价是可能增加延迟
+
+    --rotation value
+        设置初始显示旋转
+		可能的值为0、1、2和3
+		每个增量都会使屏幕逆时针旋转90度
+
+    -s, --serial serial
+        设备序列号。仅当多个设备连接到adb时才强制执行
+
+    --shortcut-mod key[+...]][,...]
+        指定用于scrcpy快捷键的修饰符。
+        可能的键是“lctrl”，“rctrl”，“lalt”，“ralt”，“lsuper”和“rsuper”。
+
+        快捷键可以包含多个键，以“ +”号分隔。
+        可以指定多个快捷方式，以“，”分隔。
+
+        例如，要将LCtrl + LAlt或LSuper用于scrcpy快捷键，请按“lctrl+lalt, lsuper”。
+
+        默认是"lalt, lsuper" (left-Alt或left-Super).
+
+    -S, --turn-screen-off
+        立即关闭设备屏幕
+
+    -t, --show-touches
+        启动时开启"显示触控位置"，退出时关闭
+        它只显示物理触摸(而不是来自scrcpy的单击)
+
+    -v, --version
+        显示scrcpy版本号
+
+    -V, --verbosity value
+        设置日志等级(debug, info, warn or error)
+        默认为info.
+
+    -w, --stay-awake
+        在scrpy运行时保持设备开启
+
+    --window-borderless
+        显示 无边框投影窗口.
+
+    --window-title text
+        自定义窗口标题
+
+    --window-x value
+        设置窗口初始水平位置
+        默认为auto（自动）
+
+    --window-y value
+        设置窗口初始垂直位置
+        默认为auto（自动）
+
+    --window-width value
+        设置窗口初始宽度
+        默认为 0 (自动)
+
+    --window-height value
+        设置窗口初始高度
+        默认为 0 (自动)
+        
+Shortcuts（快捷键）:
+
+	在下面的列表中，MOD是快捷方式修饰符。 默认情况下，它是（左）Alt或（左）Super，但是可以通过--shortcut-mod进行配置。
+
+    MOD+f
+        切换全屏模式
+
+    MOD+Left
+        向左旋转屏幕
+
+    MOD+Right
+        向右旋转屏幕
+
+    MOD+g
+        将窗口大小调整为1:1 (像素完美)
+
+    MOD+w / 双击黑边
+        调整窗口大小以移除黑边
+
+    MOD+h / 鼠标中键点击
+        点击 HOME键
+
+    MOD+b / MOD+Backspace / 鼠标右击 (屏幕开启时)
+        点击 返回键
+
+    MOD+s
+        点击 多任务键
+
+    MOD+m
+        点击 菜单键
+
+    MOD+Up
+        点击 音量+
+
+    MOD+Down
+        点击 音量-
+
+    MOD+p
+        点击 电源键 (开关屏幕)
+
+    鼠标右击 (屏幕关闭时)
+        按下电源键(Power on)
+
+    MOD+o
+        关闭设备屏幕非锁屏 (保持投影)
+
+    MOD+Shift+o
+        开启设备屏幕
+
+    MOD+r
+        旋转设备的屏幕
+
+    MOD+n
+        扩大通知面板
+
+    MOD+Shift+n
+        收起通知面板
+
+    MOD+c
+        复制到复制板 (注入复制键码, 仅支持Android >= 7)
+
+    MOD+x
+        剪切到剪切板 (注入剪切键码, 仅支持Android >= 7)
+
+    MOD+v
+        复制计算机剪切板内容到设备，然后粘贴 (注入粘贴键码, 仅支持Android >= 7)
+
+    MOD+Shift+v
+        将计算机剪贴板文本作为按键事件序列插入
+
+    MOD+i
+        开启/关闭FPS计数器 (在日志中打印帧/秒)
+
+    Ctrl+点击且移动
+        从屏幕的中心捏拉缩放
+
+    拖拽APK文件
+        从计算机安装APK（到手机）
