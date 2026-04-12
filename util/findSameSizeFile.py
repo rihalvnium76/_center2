@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 from collections import defaultdict
 import logging
 from pathlib import Path
@@ -113,31 +114,65 @@ class FileSizeScanner:
             result.append("")
         
         return "\n".join(result)
+    
+    @staticmethod
+    def parse_args():
+        parser = argparse.ArgumentParser(description="Find same size files")
+
+        parser.add_argument(
+            "-s",
+            action="append",
+            dest="src_files",
+            # An empty list is used by default, which is then converted into a set
+            default=[],
+            help="Source file"
+        )
+
+        parser.add_argument(
+            "-d",
+            type=lambda p: Path(p).resolve(),
+            dest="base_dir",
+            default=Path("/sdcard").resolve(),
+            help="Scan base directory (default: /sdcard)"
+        )
+
+        parser.add_argument(
+            "--no-color",
+            action="store_false",
+            dest="color_output",
+            default=True,
+            help="Disable color output"
+        )
+
+        args = parser.parse_args()
+
+        if not args.src_files:
+            log.error("No source file")
+            sys.exit(1)
+
+        args.src_files = set(args.src_files)
+
+        return args
 
     @classmethod
     def run(cls):
-        src_files: set[str] = set()
-        base_dir = Path("/sdcard").resolve()
-        color_output = True
+        args = cls.parse_args()
 
-        args = iter(sys.argv)
-        for arg in args:
-            if arg == "-s":
-                src_files.add(next(args))
-            elif arg == "-d":
-                base_dir = Path(next(args)).resolve()
-            elif arg == "--no-color":
-                LogFormatter.color_output = color_output = False
+        LogFormatter.color_output = args.color_output
         
-        log.debug(f"src_files: {src_files}")
-        log.debug(f"base_dir: {base_dir}")
+        log.debug(f"src_files: {args.src_files}")
+        log.debug(f"base_dir: {args.base_dir}")
 
         log.info("Scanning files...")
 
-        sizes = cls.build_sizes(src_files)
-        cls.scan_files(base_dir, sizes)
+        sizes = cls.build_sizes(args.src_files)
+        cls.scan_files(args.base_dir, sizes)
 
-        log.info("Files of same size:\n\n" + cls.to_printable_result(sizes, color_output=color_output))
+        log.info("Files of same size:\n\n" + cls.to_printable_result(sizes, color_output=args.color_output))
 
 if __name__ == "__main__":
-    FileSizeScanner.run()
+    try:
+        FileSizeScanner.run()
+    except KeyboardInterrupt:
+        log.info("Received interrupt signal, exiting...")
+        sys.exit(130)
