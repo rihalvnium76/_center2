@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+from collections import defaultdict
+import logging
+from pathlib import Path
+import sys
+
+class LogFormatter(logging.Formatter):
+    HEADER_COLORS = {
+        "D": "\033[34m",
+        "I": "\033[32m",
+        "W": "\033[93m",
+        "E": "\033[91m",
+        "C": "\033[91m",
+    }
+    DEFAULT_HEADER_COLOR = "\033[97m"
+    RESET_STYLE = "\033[0m"
+
+    color_output = True
+
+    def format(self, record):
+        record.levelname = level = record.levelname[0]
+
+        if self.color_output:
+            record.header_color = self.HEADER_COLORS.get(level, self.DEFAULT_HEADER_COLOR)
+            record.reset_style = self.RESET_STYLE
+        else:
+            record.header_color = ""
+            record.reset_style = ""
+
+        return super().format(record)
+
+def build_logger():
+    handler = logging.StreamHandler()
+    formatter = LogFormatter(
+        fmt='%(header_color)s[%(levelname)s %(asctime)s]%(reset_style)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
+    handler.setFormatter(formatter)
+    logger = logging.getLogger(__name__)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+log = build_logger()
+
+class FileSizeUtils:
+    SIZE_UNITS = ("B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "NiB")
+
+    @classmethod
+    def format(cls, byte_size: int | float, precision=2):
+        unit = cls.SIZE_UNITS[0]
+        for unit in cls.SIZE_UNITS:
+            if byte_size < 1024:
+                break
+            byte_size /= 1024
+        return f"{byte_size:.{precision}f} {unit}"
+
+class FileSizeScanner:
+    type Size = defaultdict[int, dict[str, set[Path]]]
+
+    @staticmethod 
+    def build_sizes(src_files: set[str]):
+        size_factory = lambda: {"src": set(), "dst": set()}
+        sizes: FileSizeScanner.Size = defaultdict(size_factory)
+        for src_file in src_files:
+            src_file = Path(src_file).resolve()
+            sizes[src_file.stat().st_size]["src"].add(src_file)
+        return sizes
+  
+    @staticmethod
+    def scan_files(base_dir: Path, sizes: Size):
+        for root, dirs, files in base_dir.walk():
+            for file in files:
+                file = (root / file).resolve()
+
+                size = sizes.get(file.stat().st_size)
+                if size and file not in size["src"]:
+                    size["dst"].add(file)
+  
+    @staticmethod
+    def to_printable_result(sizes: Size, *, color_output = True):
+        result = []
+        target_types = ("src", "dst")
+
+        if color_output:
+            size_color = "\033[97m"
+            dst_color = "\033[93m"
+            reset_style = "\033[0m"
+        else:
+            size_color = ""
+            dst_color = ""
+            reset_style = ""
+
+        for size, type in sizes.items():
+            if not type["dst"]:
+                prefix = ", SRC ONLY"
+            else:
+                prefix = ""
+
+            result.append(f"--- {size_color}{size} B ({FileSizeUtils.format(size)}){prefix} ---{reset_style}\n")
+
+            for target_type in target_types:
+                for src in type[target_type]:
+                    if target_type == "dst":
+                        dst_color2 = dst_color
+                        reset_style2 = reset_style
+                    else:
+                        dst_color2 = ""
+                        reset_style2 = ""
+
+                    result.append(f"{dst_color2}<{target_type}>{reset_style2} {src.as_posix()}")
+        
+            result.append("")
+        
+        return "\n".join(result)
+
+    @classmethod
+    def run(cls):
+        src_files: set[str] = set()
+        base_dir = Path("/sdcard").resolve()
+        color_output = True
+
+        args = iter(sys.argv)
+        for arg in args:
+            if arg == "-s":
+                src_files.add(next(args))
+            elif arg == "-d":
+                base_dir = Path(next(args)).resolve()
+            elif arg == "--no-color":
+                LogFormatter.color_output = color_output = False
+        
+        log.debug(f"src_files: {src_files}")
+        log.debug(f"base_dir: {base_dir}")
+
+        log.info("Scanning files...")
+
+        sizes = cls.build_sizes(src_files)
+        cls.scan_files(base_dir, sizes)
+
+        log.info("Files of same size:\n\n" + cls.to_printable_result(sizes, color_output=color_output))
+
+if __name__ == "__main__":
+    FileSizeScanner.run()
