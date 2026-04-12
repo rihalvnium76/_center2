@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 from collections import defaultdict
+import hashlib
 import logging
 from pathlib import Path
 import sys
@@ -39,7 +40,7 @@ def build_logger():
     handler.setFormatter(formatter)
     logger = logging.getLogger(__name__)
     logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     return logger
 
 log = build_logger()
@@ -57,29 +58,35 @@ class FileSizeUtils:
         return f"{byte_size:.{precision}f} {unit}"
 
 class FileSizeScanner:
-    type Size = defaultdict[int, dict[str, set[Path]]]
+    type SizeDict = dict[int, dict[str, set[Path]]]
 
     @staticmethod 
     def build_sizes(src_files: set[str]):
         size_factory = lambda: {"src": set(), "dst": set()}
-        sizes: FileSizeScanner.Size = defaultdict(size_factory)
+        sizes: FileSizeScanner.SizeDict = defaultdict(size_factory)
         for src_file in src_files:
             src_file = Path(src_file).resolve()
-            sizes[src_file.stat().st_size]["src"].add(src_file)
+            if src_file.is_file():
+                sizes[src_file.stat().st_size]["src"].add(src_file)
+            else:
+                log.warning(f"Not a file: {src_file.as_posix()}")
         return sizes
   
     @staticmethod
-    def scan_files(base_dir: Path, sizes: Size):
+    def scan_files(base_dir: Path, sizes: SizeDict):
         for root, dirs, files in base_dir.walk():
             for file in files:
                 file = (root / file).resolve()
 
-                size = sizes.get(file.stat().st_size)
-                if size and file not in size["src"]:
-                    size["dst"].add(file)
+                if file.is_file():
+                    size = sizes.get(file.stat().st_size)
+                    if size and file not in size["src"]:
+                        size["dst"].add(file)
+                else:
+                    log.warning(f"Not a file: {file.as_posix()}")
   
     @staticmethod
-    def to_printable_result(sizes: Size, *, color_output = True):
+    def to_printable_result(sizes: SizeDict, *, color_output = True):
         result = []
         target_types = ("src", "dst")
 
@@ -144,6 +151,14 @@ class FileSizeScanner:
             help="Disable color output"
         )
 
+        parser.add_argument(
+            "-v", "--verbose",
+            action="store_true",
+            dest="verbose",
+            default=False,
+            help="Verbose output"
+        )
+
         args = parser.parse_args()
 
         if not args.src_files:
@@ -157,6 +172,9 @@ class FileSizeScanner:
     @classmethod
     def run(cls):
         args = cls.parse_args()
+
+        if args.verbose:
+            log.setLevel(logging.DEBUG)
 
         LogFormatter.color_output = args.color_output
         
