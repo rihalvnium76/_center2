@@ -26,5 +26,13 @@ if [ -t 0 ]; then
     export GPG_TTY=$(tty)
 fi
 
-# (Optional) Android
-cd /storage/emulated/0/
+# (Optional) Android storage directory
+if [ -z "$_INIT_BASE_DIR" ]; then
+    cd /sdcard
+    export _INIT_BASE_DIR=1
+fi
+
+# sshd_config: AcceptEnv NO_TMUX
+if [ -z "$NO_TMUX" ] && [[ $- == *i* ]] && [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ] && command -v tmux >/dev/null 2>&1; then
+    exec tmux new-session -A -s 0
+fi
