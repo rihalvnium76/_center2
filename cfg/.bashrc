@@ -32,7 +32,11 @@ if [ -z "$_INIT_BASE_DIR" ]; then
     export _INIT_BASE_DIR=1
 fi
 
-# sshd_config: AcceptEnv NO_TMUX
+# sshd_config: AcceptEnv NO_TMUX NO_EXEC_TMUX
 if [ -z "$NO_TMUX" ] && [[ $- == *i* ]] && [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ] && command -v tmux >/dev/null 2>&1; then
-    exec tmux new-session -A -s 0
+    if [ -z "$NO_EXEC_TMUX" ]; then
+        tmux new-session -A -s 0
+    else
+        exec tmux new-session -A -s 0
+    fi
 fi
