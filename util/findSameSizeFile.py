@@ -181,6 +181,7 @@ class DuplicateFileScanner:
                         (v := file_hash_map.get(file.stat().st_size)) is not None
                         and (v := v.get(FileHasher.fast_hash(file) if hash else b"")) is not None
                         and (v := v.get(FileHasher.full_hash(file) if hash else b"")) is not None
+                        and file not in v.src
                     ):
                         v.dst.add(file)
                 else:
@@ -207,7 +208,7 @@ class DuplicateFileScanner:
                     for file in file_set.src:
                         print(f"<src> {file.as_posix()}")
                     
-                    print()
+                    # print()
 
                     for file in file_set.dst:
                         print(f"{dst_color}<dst>{reset_style} {file.as_posix()}")
