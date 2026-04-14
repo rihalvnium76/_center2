@@ -6,6 +6,8 @@ import logging
 from os import stat_result
 from pathlib import Path
 import sys
+import time
+from typing import Callable
 
 class LogFormatter(logging.Formatter):
     HEADER_COLORS = {
@@ -141,9 +143,42 @@ class FileSet:
 # size -> fast_hash -> full_hash -> src|dst -> Path
 type FileHashMap = dict[int, dict[bytes, dict[bytes, FileSet]]]
 
+class FileScanProgress:
+    INTERVAL = 5
+
+    def __init__(self):
+        self.start_time = self.last_time = time.time()
+        self.file_count = 0
+        self.total_file_size = 0
+    
+    def output(self, now: float | None = None):
+        if now is None:
+            now = time.time()
+
+        elapsed_time = now - self.start_time
+
+        files_per_sec = self.file_count / elapsed_time
+        size_per_sec = self.total_file_size / elapsed_time
+
+        log.info(f"- Processed: {self.file_count} files ({files_per_sec:.1f} files/s, {FileSizeUtils.format(size_per_sec)}/s)")
+
+        return now
+    
+    def record(self, file_size: int = -1):
+        if file_size >= 0:
+            self.file_count += 1
+            self.total_file_size += file_size
+
+        now = time.time()
+
+        if file_size < 0 or now - self.last_time > self.INTERVAL:
+            self.last_time = self.output(now)
+        
+        return file_size
+
 class DuplicateFileScanner:
     @staticmethod
-    def build_file_hash_map(src_files: list[str], hash=False):
+    def build_file_hash_map(src_files: list[str], hash=False, *, progress: FileScanProgress):
         file_hash_map: FileHashMap = defaultdict(
             lambda: defaultdict(
                 lambda: defaultdict(FileSet)
@@ -161,7 +196,7 @@ class DuplicateFileScanner:
                     full_hash = FileHasher.full_hash(file)
 
                 file_hash_map \
-                    [file.stat().st_size] \
+                    [progress.record(file.stat().st_size)] \
                     [fast_hash] \
                     [full_hash] \
                     .src.add(file)
@@ -171,14 +206,14 @@ class DuplicateFileScanner:
         return file_hash_map
     
     @staticmethod
-    def scan_files(file_hash_map: FileHashMap, base_dir: str, hash = False):
+    def scan_files(file_hash_map: FileHashMap, base_dir: str, hash = False, *, progress: FileScanProgress):
         for root, dirs, files in Path(base_dir).resolve().walk():
             for file in files:
                 file = (root / file).resolve()
 
                 if file.is_file():
                     if (
-                        (v := file_hash_map.get(file.stat().st_size)) is not None
+                        (v := file_hash_map.get(progress.record(file.stat().st_size))) is not None
                         and (v := v.get(FileHasher.fast_hash(file) if hash else b"")) is not None
                         and (v := v.get(FileHasher.full_hash(file) if hash else b"")) is not None
                         and file not in v.src
@@ -281,8 +316,21 @@ class DuplicateFileScanner:
 
         log.info("Scanning files...")
 
-        file_hash_map = cls.build_file_hash_map(args.src_files, args.hash_compare)
-        cls.scan_files(file_hash_map, args.base_dir, args.hash_compare)
+        progress = FileScanProgress()
+
+        file_hash_map = cls.build_file_hash_map(
+            args.src_files,
+            args.hash_compare,
+            progress=progress,
+        )
+        cls.scan_files(
+            file_hash_map,
+            args.base_dir,
+            args.hash_compare,
+            progress=progress,
+        )
+
+        progress.output()
 
         log.info("Files of same size/hash:")
         cls.print_result(file_hash_map, color_output=args.color_output)
