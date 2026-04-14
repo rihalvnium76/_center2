@@ -238,7 +238,7 @@ class DuplicateFileScanner:
                 for file_set in map1.values():
                     prefix = ", SRC ONLY" if not file_set.dst else ""
                 
-                    print(f"--- #{group_id + 1}, {size_color}{size} B ({FileSizeUtils.format(size)}){prefix} ---{reset_style}\n")
+                    print(f"{size_color}--- #{group_id + 1}, {size} B ({FileSizeUtils.format(size)}){prefix} ---{reset_style}\n")
 
                     for file in file_set.src:
                         print(f"<src> {file.as_posix()}")
