@@ -277,13 +277,14 @@ class DuplicateFileScanner:
         
         log.debug(f"src_files: {args.src_files}")
         log.debug(f"base_dir: {args.base_dir}")
+        log.debug(f"hash_comapre: {args.hash_compare}")
 
         log.info("Scanning files...")
 
         file_hash_map = cls.build_file_hash_map(args.src_files, args.hash_compare)
         cls.scan_files(file_hash_map, args.base_dir, args.hash_compare)
 
-        log.info("Files of same size:")
+        log.info("Files of same size/hash:")
         cls.print_result(file_hash_map, color_output=args.color_output)
     
 
