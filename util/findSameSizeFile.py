@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 import hashlib
 import logging
@@ -140,43 +141,55 @@ class FileHasher:
 class FileProgress:
     FAST_HASH_SAMPLE_SIZE = FileHasher.SAMPLE_SIZE * 3
 
-    def __init__(self,
-        output_fn: Callable[[str], None] | None = None,
-        interval = 5,
-    ):
+    def __init__(self, enabled = True, interval = 5):
+        self.enabled = enabled
         self.interval = interval
-        self.output_fn: Callable[[str], None] = output_fn if callable(output_fn) else log.info
 
         self.total_count = 0
 
         self.last_time = time.time()
         self.last_count = 0
         self.last_size = 0
-        self.outputted = False
+
+        self.modified = True
+
+    def reset(self):
+        self.total_count = 0
+
+        self.last_time = time.time()
+        self.last_count = 0
+        self.last_size = 0
+
+        self.modified = True
     
     def output(self, immediate = False):
+        if not self.enabled:
+            return
+        
         now = time.time()
         elapsed_time = now - self.last_time
-        if self.outputted or (not immediate and elapsed_time < self.interval):
+        if not self.modified or (not immediate and elapsed_time < self.interval):
             return
-        self.outputted = True
+        self.modified = False
         self.last_time = now
 
         count_per_sec = self.last_count / elapsed_time
         self.last_count = 0
 
         if self.last_size:
-            size_per_sec = FileSizeUtils.format(self.last_size / elapsed_time)
-            size_per_sec = f", {size_per_sec}/s"
+            size_per_sec = f", {FileSizeUtils.format(self.last_size / elapsed_time)}/s"
         else:
             size_per_sec = ""
         self.last_size = 0
 
-        self.output_fn(f"- Processed: {self.total_count} files ({count_per_sec:.1f} files/s{size_per_sec})")
-
+        log.info(f"- Processed: {self.total_count} files ({count_per_sec:.1f} files/s{size_per_sec})")
+    
     def record(self, size: int):
-        self.outputted = False
-
+        if not self.enabled:
+            return
+        
+        self.modified = True
+        
         self.total_count += 1
 
         self.last_count += 1
@@ -184,20 +197,19 @@ class FileProgress:
 
         self.output()
     
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc, tb):
-        self.output(True)
-
     def record_memory_item(self):
         self.record(0)
-    
+
     def record_fast_hash(self, hash: bytes):
         self.record(self.FAST_HASH_SAMPLE_SIZE if hash else 0)
     
     def record_full_hash(self, file: Path):
         self.record(file.stat().st_size)
+
+@dataclass(frozen=True)
+class File:
+    src: bool = field(compare=False, hash=False) 
+    path: Path
 
 class DuplicateFileScanner:
     DATETIME_PATTERNS = [
@@ -207,12 +219,21 @@ class DuplicateFileScanner:
         "%Y%m%d",
     ]
 
+    def __init__(self):
+        self.prog: FileProgress = FileProgress()
+        self.results: list[list[File]] = []
+
     @classmethod
     def to_mtime(cls, arg: str):
         if arg == "-":
             return None
 
-        for pattern in cls.DATETIME_PATTERNS:
+        for pattern in [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+            "%Y%m%d %H%M%S",
+            "%Y%m%d",
+        ]:
             try:
                 return datetime.strptime(arg, pattern).timestamp()
             except ValueError:
@@ -224,35 +245,32 @@ class DuplicateFileScanner:
             log.error(f"Not a datetime or path: {arg}")
             sys.exit(1)
 
-    @classmethod
-    def build_src_set(cls, sources: set[Path], source_ranges: list[list[str]], prog: FileProgress):
-        src_set: set[Path] = set()
-        visited_dir: set[Path] = set()
+    def build_sources(self, src_paths: list[str], src_ranges: list[list[str]]):
+        sources: set[Path] = set()
+        visited: set[Path] = set()
 
-        for src in sources:
-            # src = Path(src).resolve()
+        for src in src_paths:
+            src = Path(src).resolve()
             
             if src.is_file():
-                src_set.add(src)
-                prog.record_memory_item()
+                self.prog.record_memory_item()
+                sources.add(src)
             
             elif src.is_dir():
                 for root, dirs, files in src.walk(follow_symlinks=True):
-                    abs_root = root.resolve()
-                    if abs_root in visited_dir:
+                    if (abs_root := root.resolve()) in visited:
                         dirs.clear()
                         continue
-                    visited_dir.add(abs_root)
+                    visited.add(abs_root)
 
                     for file in files:
-                        file = (root / file).resolve()
-                        if file.is_file():
-                            src_set.add(file)
-                            prog.record_memory_item()
-        
-        for src_dir, start_time, end_time in source_ranges:
-            start_time = cls.to_mtime(start_time)
-            end_time = cls.to_mtime(end_time)
+                        if (file := (root / file).resolve()).is_file():
+                            self.prog.record_memory_item()
+                            sources.add(file)
+
+        for src_dir, start_time, end_time in src_ranges:
+            start_time = self.to_mtime(start_time)
+            end_time = self.to_mtime(end_time)
 
             if not os.path.isdir(src_dir):
                 log.error(f"Not a directory: {src_dir}")
@@ -260,70 +278,84 @@ class DuplicateFileScanner:
 
             for root, dirs, files in Path(src_dir).resolve().walk():
                 for file in files:
-                    file = (root / file).resolve()
-                    prog.record_memory_item()
-                    if file.is_file():
+                    if (file := (root / file).resolve()).is_file():
+                        self.prog.record_memory_item()
                         mtime = file.stat().st_mtime
                         if (start_time is None or mtime >= start_time) and (end_time is None or mtime <= end_time):
-                            src_set.add(file)
+                            sources.add(file)
+        
+        self.prog.output(True)
 
-        log.debug(f"src_set: {src_set}")
-        return src_set
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug(f"sources: {sources}")
 
-    @staticmethod
-    def group_size(src_set: set[Path], base_dir: Path, prog: FileProgress):
-        size_bucket: dict[int, set[Path]] = defaultdict(set)
+        return sources
+    
+    def build_targets(self, sources: set[Path], base_dir: str):
+        targets: set[File] = {File(True, src) for src in sources}
+        visited: set[Path] = set()
 
-        for src in src_set:
-            size_bucket[src.stat().st_size].add(src)
-            prog.record_memory_item()
+        self.prog.reset()
 
-        for root, dirs, files in base_dir.walk():
+        for root, dirs, files in Path(base_dir).resolve().walk(follow_symlinks=True):
+            if (abs_root := root.resolve()) in visited:
+                dirs.clear()
+                continue
+            visited.add(abs_root)
+
             for file in files:
-                dst = (root / file).resolve()
-                prog.record_memory_item()
-                if dst.is_file() and (size := dst.stat().st_size) in size_bucket:
-                    size_bucket[size].add(dst)
+                if (dst := (root / file).resolve()).is_file() and dst not in sources:
+                    self.prog.record_memory_item()
+                    targets.add(File(False, dst))
         
-        return size_bucket
+        self.prog.output(True)
 
-    @staticmethod
-    def group_fast_hash(src_set: set[Path], size_bucket: dict[int, set[Path]], prog: FileProgress):
-        fast_hash_bucket: dict[bytes, set[Path]] = defaultdict(set)
+        return targets
 
-        for src in src_set:
-            hash = FileHasher.fast_hash(src)
-            fast_hash_bucket[hash].add(src)
-            prog.record_fast_hash(hash)
+    def group_by_size(self, targets: set[File], hash: bool):
+        size_buckets: dict[int, list[File]] = defaultdict(list)
 
-        for file_set in size_bucket.values():
-            for file in file_set:
-                hash = FileHasher.fast_hash(file)
-                prog.record_fast_hash(hash)
-                if hash in fast_hash_bucket:
-                    fast_hash_bucket[hash].add(file)
+        # sub-hash function should not be reset anymore
+        self.prog.reset()
+
+        for file in targets:
+            self.prog.record_memory_item()
+            size_buckets[file.path.stat().st_size].append(file)
         
-        return fast_hash_bucket
+        for bucket in size_buckets.values():
+            if len(bucket) >= 2 and any(file.src for file in bucket):
+                if hash:
+                    self.group_by_fast_hash(bucket)
+                else:
+                    self.results.append(bucket)
         
-    @staticmethod
-    def group_full_hash(src_set: set[Path], fast_hash_bucket: dict[bytes, set[Path]], prog: FileProgress):
-        full_hash_bucket: dict[bytes, set[Path]] = defaultdict(set)
+        self.prog.output(True)
+    
+    def group_by_fast_hash(self, prev_bucket: list[File]):
+        hash_buckets: dict[bytes, list[File]] = defaultdict(list)
 
-        for src in src_set:
-            full_hash_bucket[FileHasher.full_hash(src)].add(src)
-            prog.record_full_hash(src)
-
-        for file_set in fast_hash_bucket.values():
-            for file in file_set:
-                hash = FileHasher.full_hash(file)
-                prog.record_full_hash(file)
-                if hash in full_hash_bucket:
-                    full_hash_bucket[hash].add(file)
+        for file in prev_bucket:
+            hash = FileHasher.fast_hash(file.path)
+            self.prog.record_fast_hash(hash)
+            hash_buckets[hash].append(file)
         
-        return full_hash_bucket
+        for bucket in hash_buckets.values():
+            if len(bucket) >= 2 and any(file.src for file in bucket):
+                self.group_by_full_hash(bucket)
+    
+    def group_by_full_hash(self, prev_bucket: list[File]):
+        hash_buckets: dict[bytes, list[File]] = defaultdict(list)
 
-    @staticmethod
-    def print_result(bucket: dict[Any, set[Path]], src_set: set[Path], color_output = True):
+        for file in prev_bucket:
+            hash = FileHasher.full_hash(file.path)
+            self.prog.record_full_hash(file.path)
+            hash_buckets[hash].append(file)
+        
+        for bucket in hash_buckets.values():
+            if len(bucket) >= 2 and any(file.src for file in bucket):
+                self.results.append(bucket)
+    
+    def print_result(self, sources: set[Path], color_output: bool):
         if color_output:
             size_color = "\033[97m"
             dst_color = "\033[93m"
@@ -332,33 +364,28 @@ class DuplicateFileScanner:
             size_color = ""
             dst_color = ""
             reset_style = ""
-        
-        for group_id, file_set in enumerate(bucket.values()):
-            src_list = []
-            dst_list = []
-            size = -1
 
-            for file in file_set:
-                if size == -1:
-                    size = file.stat().st_size
-
-                if file in src_set:
-                    src_list.append(file)
-                else:
-                    dst_list.append(file)
-                
-            prefix = ", SRC ONLY" if not dst_list else ""
+        for i, result in enumerate(self.results):
+            size = result[0].path.stat().st_size
             formatted_size = FileSizeUtils.format(size)
 
-            print(f"{size_color}--- #{group_id + 1}, {size} B ({formatted_size}){prefix} ---{reset_style}\n")
+            print(f"{size_color}--- #{i + 1}, {size} B ({formatted_size}) ---{reset_style}")
 
-            for src in src_list:
-                print(f"<src> {src.as_posix()}")
-
-            for dst in dst_list:
-                print(f"{dst_color}<dst>{reset_style} {dst.as_posix()}")
-
+            dst_paths = []
+            for file in result:
+                if file.src:
+                    print(f"<src> {file.path.as_posix()}")
+                    sources.remove(file.path)
+                else:
+                    dst_paths.append(file.path.as_posix())
+            for path in dst_paths:
+                print(f"{dst_color}<dst>{reset_style} {path}")
+            
             print()
+        
+        print(f"{size_color}--- Unique source files ---{reset_style}")
+        for src in sources:
+            print(src)
     
     @staticmethod
     def parse_args():
@@ -368,7 +395,6 @@ class DuplicateFileScanner:
             "-s", "--source",
             action="extend",
             nargs="+",
-            type=lambda p: Path(p).resolve(),
             dest="sources",
             default=[],
             help="Source file or directory",
@@ -387,9 +413,9 @@ class DuplicateFileScanner:
 
         parser.add_argument(
             "-d", "--base-dir",
-            type=lambda p: Path(p).resolve(),
             dest="base_dir",
             help="Scan base directory (default: /sdcard)",
+            default="/sdcard",
             metavar="DIR",
         )
 
@@ -430,49 +456,40 @@ class DuplicateFileScanner:
         if not args.sources and not args.source_ranges:
             log.error("No source file or directory")
             sys.exit(1)
-        
-        args.sources = set(args.sources)
 
         return args
     
-    @classmethod
-    def run(cls):
-        args = cls.parse_args()
+    def run(self):
+        args = self.parse_args()
 
         if args.verbose:
             log.setLevel(logging.DEBUG)
         LogFormatter.color_output = args.color_output
 
-        output_fn = None
-        if not args.progress_output:
-            output_fn = lambda x: None
-        
-        log.debug(args)
+        log.debug(f"args: {args}")
+
+        self.prog.enabled = args.progress_output
 
         log.info("Scanning source files...")
-        with FileProgress(output_fn) as prog:
-            src_set = cls.build_src_set(args.sources, args.source_ranges, prog)
 
-        log.info("Scanning and grouping files by size...")
-        with FileProgress(output_fn) as prog:
-            bucket = cls.group_size(src_set, args.base_dir, prog)
+        sources = self.build_sources(args.sources, args.source_ranges)
 
-        if args.hash_compare:
-            log.info("Scanning and grouping files by fast hash...")
-            with FileProgress(output_fn) as prog:
-                bucket = cls.group_fast_hash(src_set, bucket, prog)
+        log.info("Collecting files...")
 
-            log.info("Scanning and grouping files by full hash...")
-            with FileProgress(output_fn) as prog:
-                bucket = cls.group_full_hash(src_set, bucket, prog)
-        
-        log.info("Files of same size/hash:")
-        cls.print_result(bucket, src_set, args.color_output)
-                
+        targets = self.build_targets(sources, args.base_dir)
+
+        log.info("Grouping files...")
+
+        self.group_by_size(targets, args.hash_compare)
+
+        log.info("Duplicate files (same size/hash):")
+
+        self.print_result(sources, args.color_output)
+
 
 if __name__ == "__main__":
     try:
-        DuplicateFileScanner.run()
+        DuplicateFileScanner().run()
     except KeyboardInterrupt:
         log.info("Received interrupt signal, exiting...")
         sys.exit(130)
