@@ -369,7 +369,7 @@ class DuplicateFileScanner:
             ):
                 if not hash:
                     yield b1
-                    return
+                    continue
                 
                 for b2 in cls.group_filter(
                     b1,
