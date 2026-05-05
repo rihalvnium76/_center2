@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 
-
 import argparse
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
-from genericpath import isfile
 import hashlib
 import logging
 import os
 import sys
 import time
-from typing import Any, Callable, Collection, Hashable, Iterable
+from typing import Any, Callable, Collection, Generator, Hashable, Iterable
+
+try:
+    from xxhash import xxh3_128
+except ImportError:
+    pass
 
 
 class LogFormatter(logging.Formatter):
@@ -44,6 +47,7 @@ def build_logger():
     handler = logging.StreamHandler()
     formatter = LogFormatter(
         fmt='%(header_color)s[%(levelname)s %(asctime)s]%(reset_style)s %(message)s',
+        # full: %Y-%m-%d %H:%M:%S
         datefmt='%H:%M:%S',
     )
     handler.setFormatter(formatter)
@@ -66,35 +70,15 @@ class FileSizeUtils:
             byte_size /= 1024
         return f"{byte_size:.{precision}f} {unit}"
 
+@dataclass
 class File:
-    # Fast hash file threshold, 3 MiB
-    HASH_THRESHOLD = 1024 * 1024 * 3
-    # Fast hash sample size, 64 KiB
-    HASH_SAMPLE_SIZE = 1024 * 64
+    src: bool
+    path: str
+    size: int
+    dev: int
+    ino: int
+    mtime: float
 
-    fast_hashes: dict[tuple[int, int], bytes] = {}
-    full_hashes: dict[tuple[int, int], bytes] = {}
-
-    def __init__(
-        self,
-        src: bool,
-        path: str,
-        size: int,
-        dev: int,
-        ino: int,
-        mtime: float,
-    ):
-        self.src = src
-        self.path = path
-        self.size = size
-        self.dev = dev
-        self.ino = ino
-        self.mtime = mtime
-    
-    def __str__(self) -> str:
-        src = "src" if self.src else "dst"
-        return f"{src} {self.path}"
-    
     @classmethod
     def from_stat(cls, src: bool, path: str, stat: os.stat_result):
         return cls(
@@ -106,48 +90,75 @@ class File:
             stat.st_mtime
         )
 
-    @staticmethod
-    def hasher():
-        return hashlib.blake2b()
+    @cached_property
+    def fast_hash(self):
+        return FileHasher.fast_hash(self)
     
     @cached_property
     def full_hash(self):
-        if (cache := self.full_hashes.get(key := (self.dev, self.ino))) is not None:
+        return FileHasher.full_hash(self)
+
+try:
+    import xxhash
+except ImportError:
+    log.warning("xxHash not installed, falling back to hashlib.blake2b")
+
+class FileHasher:
+    # Fast hash file threshold, 3 MiB
+    THRESHOLD = 1024 * 1024 * 3
+    # Fast hash sample size, 64 KiB
+    SAMPLE_SIZE = 1024 * 64
+    
+    TOTAL_SAMPLE_SIZE = SAMPLE_SIZE * 3
+
+    type HashMap = dict[tuple[int, int], bytes]
+
+    fast_hashes: HashMap = {}
+    full_hashes: HashMap = {}
+
+    try:
+        hasher = staticmethod(xxh3_128) # pyright: ignore[reportPossiblyUnboundVariable]
+    except Exception:
+        log.warning("xxHash.xxh3_128 not available, falling back to hashlib.blake2b")
+        hasher = staticmethod(hashlib.blake2b)
+
+    @classmethod
+    def full_hash(cls, file: File):
+        if (cache := cls.full_hashes.get(key := (file.dev, file.ino))) is not None:
             return cache
         
-        with open(self.path, "rb") as f:
-            self.full_hashes[key] = hash = hashlib.file_digest(f, self.hasher).digest()
+        with open(file.path, "rb") as f:
+            cls.full_hashes[key] = hash = hashlib.file_digest(f, cls.hasher).digest() # pyright: ignore[reportArgumentType]
         
         return hash
     
-    @cached_property
-    def fast_hash(self):
-        if self.size < self.HASH_THRESHOLD:
+    @classmethod
+    def fast_hash(cls, file: File):
+        if file.size < cls.THRESHOLD:
             return b""
         
-        if (cache := self.fast_hashes.get(key := (self.dev, self.ino))) is not None:
+        if (cache := cls.fast_hashes.get(key := (file.dev, file.ino))) is not None:
             return cache
 
-        with open(self.path, "rb") as f:
-            head_chunk = f.read(self.HASH_SAMPLE_SIZE)
+        with open(file.path, "rb") as f:
+            head_chunk = f.read(cls.SAMPLE_SIZE)
 
-            f.seek((self.size // 2) - (self.HASH_SAMPLE_SIZE // 2))
-            middle_chunk = f.read(self.HASH_SAMPLE_SIZE)
+            f.seek((file.size // 2) - (cls.SAMPLE_SIZE // 2))
+            middle_chunk = f.read(cls.SAMPLE_SIZE)
 
-            f.seek(-self.HASH_SAMPLE_SIZE, os.SEEK_END)
-            tail_chunk = f.read(self.HASH_SAMPLE_SIZE)
+            f.seek(-cls.SAMPLE_SIZE, os.SEEK_END)
+            tail_chunk = f.read(cls.SAMPLE_SIZE)
         
-        hasher = self.hasher()
+        hasher = cls.hasher()
         hasher.update(head_chunk)
         hasher.update(middle_chunk)
         hasher.update(tail_chunk)
-        self.fast_hashes[key] = hash = hasher.digest()
+        cls.fast_hashes[key] = hash = hasher.digest()
 
         return hash
 
-class FileProgress:
-    FAST_HASH_SAMPLE_SIZE = File.HASH_SAMPLE_SIZE * 3
 
+class FileProgress:
     disabled = False
     interval = 5
 
@@ -155,42 +166,28 @@ class FileProgress:
         self,
         total_count = 0,
         name = "",
-        disabled: bool | None = None,
-        paused = False,
     ):
+        self.total_count = f"/{total_count}" if total_count else ""
+        self.name = f"- ({name}) " if name else "- "
+
         self.unmodified = True
-        self.total_count = total_count
-        self.name = name
+        self.acc_count = 0
 
-        if disabled is not None:
-            self.disabled = self.disabled or disabled
-
-        self.accumulated_count = 0
-
-        self.last_time = time.time()
+        self.last_time = time.monotonic()
         self.last_count = 0
         self.last_size = 0
 
-        self.last_pause_time = self.last_time if paused else None
-        self.pause_elapsed_time = 0
-
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc, tb):
-        self.output(False)
-    
     def output(self, check_interval = True):
-        if self.disabled:
+        if self.disabled or self.unmodified:
             return
         
-        elapsed_time = (now := time.time()) - self.last_time - self.pause_elapsed_time
-        if self.unmodified or (check_interval and elapsed_time < self.interval):
+        elapsed_time = (now := time.monotonic()) - self.last_time
+        if check_interval and elapsed_time < self.interval:
             return
+        
         self.unmodified = True
         self.last_time = now
-        self.pause_elapsed_time = 0
-
+        
         count_per_sec = self.last_count / elapsed_time
         self.last_count = 0
 
@@ -200,49 +197,35 @@ class FileProgress:
         else:
             size_per_sec = ""
         
-        total_count = f"/{self.total_count}" if self.total_count else ""
-
-        name = f"({self.name}) " if self.name else ""
-
-        log.info(f"- {name}Processed: {self.accumulated_count}{total_count} items ({count_per_sec:.1f} items/s{size_per_sec})")
+        log.info(f"{self.name}Processed: {self.acc_count}{self.total_count} items ({count_per_sec:.1f} items/s{size_per_sec})")
     
-    def record(self, size: int):
+    def stat(self, size: int):
         if self.disabled:
             return
         
-        self.accumulated_count += 1
+        self.unmodified = False
+        self.acc_count += 1
 
         self.last_count += 1
         self.last_size += size
 
-        self.unmodified = False
         self.output()
     
-    def pause(self, value: bool):
-        if self.disabled:
-            return
-        
-        if value:
-            if self.last_pause_time is not None:
-                return
-            
-            self.last_pause_time = time.time()
-        else:
-            if self.last_pause_time is None:
-                return
-            
-            self.pause_elapsed_time += time.time() - self.last_pause_time
-            self.last_pause_time = None
-    
-    def record_file_item(self):
-        self.record(0)
+    def stat_item(self):
+        self.stat(0)
 
-    def record_fast_hash(self, file: File):
-        self.record(0 if file.size < File.HASH_THRESHOLD else self.FAST_HASH_SAMPLE_SIZE)
+    def stat_fast_hash(self, file: File):
+        self.stat(0 if file.size < FileHasher.THRESHOLD else FileHasher.TOTAL_SAMPLE_SIZE)
     
-    def record_full_hash(self, file: File):
-        self.record(file.size)
-
+    def stat_full_hash(self, file: File):
+        self.stat(file.size)
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc, tb):
+        self.output(False)
+    
 class DuplicateFileScanner:
     DATETIME_PATTERNS = [
         "%Y-%m-%d %H:%M:%S",
@@ -250,8 +233,6 @@ class DuplicateFileScanner:
         "%Y%m%d %H%M%S",
         "%Y%m%d",
     ]
-
-    color_output = True
 
     @classmethod
     def to_mtime(cls, arg: str):
@@ -296,11 +277,11 @@ class DuplicateFileScanner:
                 path = os.path.realpath(path)
                 if os.path.isfile(path):
                     sources[path] = File.from_stat(True, path, os.lstat(path))
-                    prog.record_file_item()
+                    prog.stat_item()
                 elif os.path.isdir(path):
                     for file in cls.walk_dir(True, path, set()):
                         sources[file.path] = file
-                        prog.record_file_item()
+                        prog.stat_item()
             
             for dir, start_time, end_time in ranges:
                 dir = os.path.realpath(dir)
@@ -314,13 +295,9 @@ class DuplicateFileScanner:
                 for file in cls.walk_dir(True, dir, set()):
                     if (start_time is None or file.mtime >= start_time) and (end_time is None or file.mtime <= end_time):
                         sources[file.path] = file
-                        prog.record_file_item()
-
-        return sources
-    
-    @classmethod
-    def build_src_paths(cls, sources: dict[str, File]):
-        return set(sources.keys())
+                        prog.stat_item()
+        
+        return sources, set(sources.keys())
     
     @classmethod
     def scan_dst(cls, sources: dict[str, File], base_dirs: list[str]):
@@ -333,56 +310,54 @@ class DuplicateFileScanner:
                 for file in cls.walk_dir(False, base_dir, set()):
                     if file.path not in sources:
                         sources[file.path] = file
-                    prog.record_file_item()
+                        prog.stat_item()
         
         return sources.values()
     
-    @classmethod
-    def group_filter(
-        cls,
+    @staticmethod
+    def group_filter_files(
         files: Iterable[File],
         key: Callable[[File], Hashable],
-        on_file_computing: Callable[[], Any],
-        on_file_computed: Callable[[File], Any],
+        stat: Callable[[File], Any],
     ):
         buckets: dict[Hashable, list[File]] = defaultdict(list)
 
         for file in files:
-            on_file_computing()
             buckets[key(file)].append(file)
-            on_file_computed(file)
+            stat(file)
         
         return (bucket for bucket in buckets.values() if len(bucket) > 1 and any(file.src for file in bucket))
     
+    @staticmethod
+    def flatten_groups(buckets: Iterable[list[File]]):
+        for bucket in buckets:
+            yield from bucket
+    
     @classmethod
     def find_duplicate(cls, targets: Collection[File], hash: bool):
-        with (
-            FileProgress(name="size", paused=True) as s,
-            FileProgress(name="fast hash", disabled=not hash, paused=True) as qh,
-            FileProgress(name="full hash", disabled=not hash, paused=True) as fh,
-        ):
-            for b1 in cls.group_filter(
+        with FileProgress(len(targets), "size") as p:
+            results = [result for result in cls.group_filter_files(
                 targets,
                 lambda f: f.size,
-                lambda: s.pause(False),
-                lambda f: (s.record_file_item(), s.pause(True))
-            ):
-                if not hash:
-                    yield b1
-                    continue
-                
-                for b2 in cls.group_filter(
-                    b1,
-                    lambda f: f.fast_hash,
-                    lambda: qh.pause(False),
-                    lambda f: (qh.record_fast_hash(f), qh.pause(True))
-                ):
-                    yield from cls.group_filter(
-                        b2,
-                        lambda f: f.full_hash,
-                        lambda: fh.pause(False),
-                        lambda f: (fh.record_full_hash(f), qh.pause(True))
-                    )
+                lambda f: p.stat_item(),
+            )]
+        
+        if not hash:
+            return results
+
+        with FileProgress(len(results := list(cls.flatten_groups(results))), "fast_hash") as p:
+            results = [result for result in cls.group_filter_files(
+                results,
+                lambda f: f.fast_hash,
+                lambda f: p.stat_fast_hash(f),
+            )]
+
+        with FileProgress(len(results := list(cls.flatten_groups(results))), "full_hash") as p:
+            return [result for result in cls.group_filter_files(
+                results,
+                lambda f: f.full_hash,
+                lambda f: p.stat_full_hash(f),
+            )]
     
     @staticmethod
     def print_result(results: Iterable[list[File]], src_paths: set[str], color_output: bool):
@@ -400,7 +375,7 @@ class DuplicateFileScanner:
         for i, result in enumerate(results):
             size = result[0].size
             formatted_size = FileSizeUtils.format(size)
-            print(f"{size_color}--- #{i + 1}, {size} B ({formatted_size}) ---{reset_style}")
+            print(f"{size_color}--- #{i + 1}, {formatted_size} ({size} B) ---{reset_style}")
 
             dst_paths.clear()
 
@@ -419,7 +394,7 @@ class DuplicateFileScanner:
         print(f"{size_color}--- Unique source files ---{reset_style}")
         for src in src_paths:
             print(src)
-
+    
     @staticmethod
     def parse_args():
         parser = argparse.ArgumentParser(description="Find same size/hash files")
@@ -505,12 +480,11 @@ class DuplicateFileScanner:
             log.setLevel(logging.DEBUG)
             log.debug(f"args: {args}")
         
-        LogFormatter.color_output = cls.color_output = args.color_output
+        LogFormatter.color_output = args.color_output
         FileProgress.disabled = not args.progress_output
         
         log.info("Scanning source files...")
-        sources = cls.scan_src(args.sources, args.source_ranges)
-        src_paths = cls.build_src_paths(sources)
+        sources, src_paths = cls.scan_src(args.sources, args.source_ranges)
 
         log.info("Scanning target files...")
         targets = cls.scan_dst(sources, args.base_dirs)
@@ -524,7 +498,7 @@ class DuplicateFileScanner:
         cls.print_result(results, src_paths, args.color_output)
 
 if __name__ == "__main__":
-    VERSION = "2.0.0"
+    VERSION = "2.1.0"
     try:
         DuplicateFileScanner.run()
     except KeyboardInterrupt:
