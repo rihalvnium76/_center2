@@ -98,11 +98,6 @@ class File:
     def full_hash(self):
         return FileHasher.full_hash(self)
 
-try:
-    import xxhash
-except ImportError:
-    log.warning("xxHash not installed, falling back to hashlib.blake2b")
-
 class FileHasher:
     # Fast hash file threshold, 3 MiB
     THRESHOLD = 1024 * 1024 * 3
