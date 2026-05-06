@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 import hashlib
+import itertools
 import logging
 import os
 import sys
@@ -99,12 +100,13 @@ class File:
         return FileHasher.full_hash(self)
 
 class FileHasher:
-    # Fast hash file threshold, 3 MiB
-    THRESHOLD = 1024 * 1024 * 3
-    # Fast hash sample size, 64 KiB
-    SAMPLE_SIZE = 1024 * 64
-    
+    # Fast hash sample size, 4 KiB
+    SAMPLE_SIZE = 1024 * 4
     TOTAL_SAMPLE_SIZE = SAMPLE_SIZE * 3
+    # Fast hash file threshold, 1 MiB
+    THRESHOLD = 1024 * 1024 * 1
+
+    assert THRESHOLD >= TOTAL_SAMPLE_SIZE >= 0, "Invalid threshold or sample size"
 
     type HashMap = dict[tuple[int, int], bytes]
 
@@ -151,7 +153,6 @@ class FileHasher:
         cls.fast_hashes[key] = hash = hasher.digest()
 
         return hash
-
 
 class FileProgress:
     disabled = False
@@ -223,10 +224,10 @@ class FileProgress:
     
 class DuplicateFileScanner:
     DATETIME_PATTERNS = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d",
         "%Y%m%d %H%M%S",
         "%Y%m%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
     ]
 
     @classmethod
@@ -321,38 +322,49 @@ class DuplicateFileScanner:
             buckets[key(file)].append(file)
             stat(file)
         
-        return (bucket for bucket in buckets.values() if len(bucket) > 1 and any(file.src for file in bucket))
+        return [bucket for bucket in buckets.values() if len(bucket) > 1 and any(file.src for file in bucket)]
     
-    @staticmethod
-    def flatten_groups(buckets: Iterable[list[File]]):
-        for bucket in buckets:
-            yield from bucket
+    @classmethod
+    def progress_duplicate(
+        cls,
+        targets: Collection[File],
+        name: str,
+        key: Callable[[File], Hashable],
+        stat_factory: Callable[[FileProgress], Callable[[File], Any]],
+    ):
+        with FileProgress(len(targets), name) as p:
+            return cls.group_filter_files(
+                targets,
+                key,
+                stat_factory(p),
+            )
     
     @classmethod
     def find_duplicate(cls, targets: Collection[File], hash: bool):
-        with FileProgress(len(targets), "size") as p:
-            results = [result for result in cls.group_filter_files(
-                targets,
-                lambda f: f.size,
-                lambda f: p.stat_item(),
-            )]
+        results = cls.progress_duplicate(
+            targets,
+            "size",
+            lambda f: f.size,
+            lambda p: lambda f: p.stat_item(),
+        )
+
         
         if not hash:
             return results
 
-        with FileProgress(len(results := list(cls.flatten_groups(results))), "fast_hash") as p:
-            results = [result for result in cls.group_filter_files(
-                results,
-                lambda f: f.fast_hash,
-                lambda f: p.stat_fast_hash(f),
-            )]
+        results = cls.progress_duplicate(
+            list(itertools.chain.from_iterable(results)),
+            "fast_hash",
+            lambda f: f.fast_hash,
+            lambda p: lambda f: p.stat_fast_hash(f),
+        )
 
-        with FileProgress(len(results := list(cls.flatten_groups(results))), "full_hash") as p:
-            return [result for result in cls.group_filter_files(
-                results,
-                lambda f: f.full_hash,
-                lambda f: p.stat_full_hash(f),
-            )]
+        return cls.progress_duplicate(
+            list(itertools.chain.from_iterable(results)),
+            "full_hash",
+            lambda f: f.full_hash,
+            lambda p: lambda f: p.stat_full_hash(f),
+        )
     
     @staticmethod
     def print_result(results: Iterable[list[File]], src_paths: set[str], color_output: bool):
