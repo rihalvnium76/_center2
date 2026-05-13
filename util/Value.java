@@ -1,4 +1,5 @@
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -51,5 +52,13 @@ public record Value<E>(E value) {
 
     public static <T> T buildOf(Supplier<T> builder) {
         return builder.get();
+    }
+
+    public static <T> Optional<T> toOptional(Value<T> value) {
+        return Optional.ofNullable(get(value));
+    }
+
+    public Optional<E> toOptional() {
+        return Optional.ofNullable(value);
     }
 }
