@@ -27,6 +27,15 @@ public record Value<E>(E value) {
         return get(value, null);
     }
 
+    public static <T> Optional<T> toOptional(Value<T> value) {
+        return Optional.ofNullable(get(value));
+    }
+
+    public Optional<E> toOptional() {
+        return Optional.ofNullable(value);
+    }
+
+
     @SuppressWarnings("unchecked")
     public static <K, V> V get(Map<? extends K, ?> map, K key, V nullDefault) {
         V value;
@@ -36,7 +45,7 @@ public record Value<E>(E value) {
     public static <K, V> V get(Map<? extends K, ?> map, K key) {
         return get(map, key, null);
     }
-
+    
     public static <T> T buildOf() {
         return null;
     }
@@ -46,19 +55,16 @@ public record Value<E>(E value) {
     }
 
     public static <T> T buildOf(T obj, Consumer<T> builder) {
-        builder.accept(obj);
+        if (builder != null) {
+            builder.accept(obj);
+        }
         return obj;
     }
 
     public static <T> T buildOf(Supplier<T> builder) {
-        return builder.get();
-    }
-
-    public static <T> Optional<T> toOptional(Value<T> value) {
-        return Optional.ofNullable(get(value));
-    }
-
-    public Optional<E> toOptional() {
-        return Optional.ofNullable(value);
+        if (builder != null) {
+            return builder.get();
+        }
+        return null;
     }
 }
