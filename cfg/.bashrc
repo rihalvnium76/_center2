@@ -3,7 +3,7 @@ _set_ps1() {
     local exit_code=$?
 
     local exit_color=""
-    if [[ $exit_code -ne 0 ]]; then exit_color="\[\e[91m\]"; fi
+    (( exit_code )) && exit_color="\[\e[91m\]"
 
     local ip=$(ip route | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}')
     ip=${ip:-"-"}
