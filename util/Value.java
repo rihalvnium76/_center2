@@ -40,6 +40,7 @@ public record Value<E>(E value) {
   // (Recommend static import of this utility class)
 
   // Structured Object Builders
+  // (Replace temporary variables with expressions to avoid polluting the scope)
 
   @SuppressWarnings("unchecked")
   public static <K, V> V get(Map<? extends K, ?> map, K key, V nullDefault) {
