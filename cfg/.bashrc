@@ -1,3 +1,6 @@
+# If not running interactively, don't do anything
+[[ $- != *i* ]] && return
+
 _set_ps1() {
     # MUST be at the start
     local exit_code=$?
