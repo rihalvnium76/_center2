@@ -37,6 +37,7 @@ public record Value<E>(E value) {
 
 
   // === Wonderful Test Utilities ===
+  // (Recommend static import of this utility class)
 
   // Structured Object Builders
 
@@ -120,7 +121,7 @@ public record Value<E>(E value) {
 
   @SafeVarargs
   public static <E> Set<E> setOf(E elem, E... elems) {
-    return collectionOf(new HashSet<>((int)((1 + elems.length) / 0.75f) + 1), elem);
+    return collectionOf(new HashSet<>((int)((1 + elems.length) / 0.75f) + 1), elem, elems);
   }
 
   public static <K, V> Map<K, V> mapOf() {
@@ -169,7 +170,7 @@ public record Value<E>(E value) {
   // Bypass SonarLint's dead code detection
   private static final boolean DEBUGGABLE = System.currentTimeMillis() < Long.MIN_VALUE + 1L;
   private static final Executable EXECUTABLE = () -> {};
-  
+
   // Bypass SonarLint's missing assertion detection
   // Avoid failing unit test execution
   // Usage: assertDoesNotThrow(run(hasException, () -> spiedTestedClass.testedMethod()))
