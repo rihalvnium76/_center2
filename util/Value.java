@@ -59,6 +59,23 @@ public record Value<E>(E value) {
     return obj;
   }
 
+  // === NOTE on Mockito ===
+  //
+  // DO NOT do this (causes UnfinishedStubbingException):
+  // when(root).thenReturn(
+  //     buildOf(mock(A.class), a -> when(a).thenReturn(
+  //         buildOf(mock(B.class), b -> when(b).thenReturn(...))
+  //     ))
+  // )
+  //
+  // Instead, do:
+  // buildOf(
+  //     buildOf(mock(A.class), a -> buildOf(
+  //         buildOf(mock(B.class), b -> when(b).thenReturn(...)),
+  //         b -> when(a).thenReturn(b)
+  //     )),
+  //     a -> when(root).thenReturn(a)
+  // )
   public static <T> T buildOf(T obj, Consumer<T> builder) {
     if (builder != null) {
       builder.accept(obj);
