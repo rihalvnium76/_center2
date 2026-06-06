@@ -39,8 +39,8 @@ public record Value<E>(E value) {
   // === Wonderful Test Utilities ===
   // (Recommend static import of this utility class)
 
-  // Structured Object Builders
-  // (Replace temporary variables with expressions to avoid polluting the scope)
+  // Map Getters
+  // (Null-safe and auto-casting)
 
   @SuppressWarnings("unchecked")
   public static <K, V> V get(Map<? extends K, ?> map, K key, V nullDefault) {
@@ -51,6 +51,9 @@ public record Value<E>(E value) {
   public static <K, V> V get(Map<? extends K, ?> map, K key) {
     return get(map, key, null);
   }
+
+  // Structured Object Builders
+  // (Replace temporary variables with expressions to avoid polluting the scope)
 
   public static <T> T buildOf() {
     return null;
