@@ -106,24 +106,31 @@ public record Value<E>(E value) {
   // Structured Mutable Collection Builders
   // (You never know whether the input collection will be written in)
 
+  public static <E, C extends Collection<E>> C collectionOf(C target, E item) {
+    target.add(item);
+    return target;
+  }
+
+  @SafeVarargs
+  public static <E, C extends Collection<E>> C collectionOf(C target, E item1, E... items) {
+    target.add(item1);
+    for (E item : items) {
+      target.add(item);
+    }
+    return target;
+  }
+
   public static <E> List<E> toList(IntFunction<List<E>> builder) {
     return builder.apply(0);
   }
 
   public static <E> List<E> toList(IntFunction<List<E>> builder, E item) {
-    var list = builder.apply(1);
-    list.add(item);
-    return list;
+    return collectionOf(builder.apply(1), item);
   }
 
   @SafeVarargs
   public static <E> List<E> toList(IntFunction<List<E>> builder, E item1, E... items) {
-    var list = builder.apply(1 + items.length);
-    list.add(item1);
-    for (E item : items) {
-      list.add(item);
-    }
-    return list;
+    return collectionOf(builder.apply(1 + items.length), item1, items);
   }
 
   public static <E> Set<E> toSet(IntFunction<Set<E>> builder) {
@@ -131,19 +138,12 @@ public record Value<E>(E value) {
   }
 
   public static <E> Set<E> toSet(IntFunction<Set<E>> builder, E item) {
-    var list = builder.apply(2);
-    list.add(item);
-    return list;
+    return collectionOf(builder.apply(2), item);
   }
 
   @SafeVarargs
   public static <E> Set<E> toSet(IntFunction<Set<E>> builder, E item1, E... items) {
-    var set = builder.apply((int)((1 + items.length) / 0.75f) + 1);
-    set.add(item1);
-    for (E item : items) {
-      set.add(item);
-    }
-    return set;
+    return collectionOf(builder.apply((int)((1 + items.length) / 0.75f) + 1), item1, items);
   }
 
   public static <K, V> Map.Entry<K, V> pair(K key, V value) {
