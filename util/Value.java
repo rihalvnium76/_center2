@@ -1,6 +1,7 @@
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
 public record Value<E>(E value) {
@@ -105,83 +106,115 @@ public record Value<E>(E value) {
   // Structured Mutable Collection Builders
   // (You never know whether the input collection will be written in)
 
-  public static <E, C extends Collection<E>> C collectionOf(C c, E elem) {
-    c.add(elem);
-    return c;
+  public static <E> List<E> toList(IntFunction<List<E>> builder) {
+    return builder.apply(0);
+  }
+
+  public static <E> List<E> toList(IntFunction<List<E>> builder, E item) {
+    var list = builder.apply(1);
+    list.add(item);
+    return list;
   }
 
   @SafeVarargs
-  public static <E, C extends Collection<E>> C collectionOf(C c, E elem, E... elems) {
-    c.add(elem);
-    for (E e : elems) {
-      c.add(e);
+  public static <E> List<E> toList(IntFunction<List<E>> builder, E item1, E... items) {
+    var list = builder.apply(1 + items.length);
+    list.add(item1);
+    for (E item : items) {
+      list.add(item);
     }
-    return c;
+    return list;
   }
 
-  public static <E> List<E> listOf() {
-    return new ArrayList<>(0);
+  public static <E> Set<E> toSet(IntFunction<Set<E>> builder) {
+    return builder.apply(0);
   }
 
-  public static <E> List<E> listOf(E elem) {
-    return collectionOf(new ArrayList<>(1), elem);
-  }
-
-  @SafeVarargs
-  public static <E> List<E> listOf(E elem, E... elems) {
-    return collectionOf(new ArrayList<>(1 + elems.length), elem, elems);
-  }
-
-  public static <E> Set<E> setOf() {
-    return new HashSet<>(0);
-  }
-
-  public static <E> Set<E> setOf(E elem) {
-    return collectionOf(new HashSet<>(2), elem);
+  public static <E> Set<E> toSet(IntFunction<Set<E>> builder, E item) {
+    var list = builder.apply(2);
+    list.add(item);
+    return list;
   }
 
   @SafeVarargs
-  public static <E> Set<E> setOf(E elem, E... elems) {
-    return collectionOf(new HashSet<>((int)((1 + elems.length) / 0.75f) + 1), elem, elems);
-  }
-
-  public static <K, V> Map<K, V> mapOf() {
-    return new HashMap<>(0);
-  }
-
-  public static <K, V> Map<K, V> pairTo(Map<K, V> map, K key, V value) {
-    map.put(key, value);
-    return map;
-  }
-
-  public static <K, V> Map<K, V> mapOf(K key, V value) {
-    return pairTo(new HashMap<>(2), key, value);
+  public static <E> Set<E> toSet(IntFunction<Set<E>> builder, E item1, E... items) {
+    var set = builder.apply((int)((1 + items.length) / 0.75f) + 1);
+    set.add(item1);
+    for (E item : items) {
+      set.add(item);
+    }
+    return set;
   }
 
   public static <K, V> Map.Entry<K, V> pair(K key, V value) {
     return new AbstractMap.SimpleEntry<>(key, value);
   }
 
-  public static <K, V> Map<K, V> mapOf(Map<K, V> map, Map.Entry<K, V> entry) {
-    return pairTo(map, entry.getKey(), entry.getValue());
+  public static <K, V> Map<K, V> toMap(IntFunction<Map<K, V>> builder) {
+    return builder.apply(0);
+  }
+
+  public static <K, V> Map<K, V> pairTo(IntFunction<Map<K, V>> builder, K key, V value) {
+    var map = builder.apply(2);
+    map.put(key, value);
+    return map;
+  }
+
+  public static <K, V> Map<K, V> toMap(IntFunction<Map<K, V>> builder, Map.Entry<K, V> entry) {
+    return pairTo(builder, entry.getKey(), entry.getValue());
   }
 
   @SafeVarargs
-  public static <K, V> Map<K, V> mapOf(Map<K, V> map, Map.Entry<K, V> entry, Map.Entry<K, V>... entries) {
-    map.put(entry.getKey(), entry.getValue());
-    for (Map.Entry<K, V> e : entries) {
-      map.put(e.getKey(), e.getValue());
+  public static <K, V> Map<K, V> toMap(IntFunction<Map<K, V>> builder, Map.Entry<K, V> entry1, Map.Entry<K, V>... entries) {
+    var map = builder.apply((int)((1 + entries.length) / 0.75f) + 1);
+    map.put(entry1.getKey(), entry1.getValue());
+    for (Map.Entry<K, V> entry : entries) {
+      map.put(entry.getKey(), entry.getValue());
     }
     return map;
   }
 
-  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry) {
-    return pairTo(new HashMap<>(2), entry.getKey(), entry.getValue());
+  public static <E> List<E> listOf() {
+    return new ArrayList<>(0);
+  }
+
+  public static <E> List<E> listOf(E item) {
+    return toList(ArrayList::new, item);
   }
 
   @SafeVarargs
-  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry, Map.Entry<K, V>... entries) {
-    return mapOf(new HashMap<>((int)((1 + entries.length) / 0.75f) + 1), entry, entries);
+  public static <E> List<E> listOf(E item1, E... items) {
+    return toList(ArrayList::new, item1, items);
+  }
+
+  public static <E> Set<E> setOf() {
+    return new HashSet<>(0);
+  }
+
+  public static <E> Set<E> setOf(E item) {
+    return toSet(HashSet::new, item);
+  }
+
+  @SafeVarargs
+  public static <E> Set<E> setOf(E item1, E... items) {
+    return toSet(HashSet::new, item1, items);
+  }
+
+  public static <K, V> Map<K, V> mapOf() {
+    return new HashMap<>(0);
+  }
+
+  public static <K, V> Map<K, V> pairTo(K key, V value) {
+    return pairTo(HashMap::new, key, value);
+  }
+
+  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry) {
+    return toMap(HashMap::new, entry);
+  }
+
+  @SafeVarargs
+  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry1, Map.Entry<K, V>... entries) {
+    return toMap(HashMap::new, entry1, entries);
   }
 
 
