@@ -1,7 +1,6 @@
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
 public record Value<E>(E value) {
@@ -44,12 +43,12 @@ public record Value<E>(E value) {
   // (Null-safe and auto-casting)
 
   @SuppressWarnings("unchecked")
-  public static <K, V> V get(Map<? extends K, ?> map, K key, V nullDefault) {
+  public static <K, V> V get(Map<K, ?> map, K key, V nullDefault) {
     V value;
     return map != null && (value = (V) map.get(key)) != null ? value : nullDefault;
   }
 
-  public static <K, V> V get(Map<? extends K, ?> map, K key) {
+  public static <K, V> V get(Map<K, ?> map, K key) {
     return get(map, key, null);
   }
 
@@ -103,72 +102,33 @@ public record Value<E>(E value) {
   }
 
 
-  // Structured Mutable Collection Builders
+  // Mutable Collection Builders
   // (You never know whether the input collection will be written in)
-
-  public static <E, C extends Collection<E>> C collectionOf(C target, E item) {
-    target.add(item);
-    return target;
-  }
-
-  @SafeVarargs
-  public static <E, C extends Collection<E>> C collectionOf(C target, E item1, E... items) {
-    target.add(item1);
-    for (E item : items) {
-      target.add(item);
-    }
-    return target;
-  }
-
-  public static <E> List<E> toList(IntFunction<List<E>> builder) {
-    return builder.apply(0);
-  }
-
-  public static <E> List<E> toList(IntFunction<List<E>> builder, E item) {
-    return collectionOf(builder.apply(1), item);
-  }
-
-  @SafeVarargs
-  public static <E> List<E> toList(IntFunction<List<E>> builder, E item1, E... items) {
-    return collectionOf(builder.apply(1 + items.length), item1, items);
-  }
-
-  public static <E> Set<E> toSet(IntFunction<Set<E>> builder) {
-    return builder.apply(0);
-  }
-
-  public static <E> Set<E> toSet(IntFunction<Set<E>> builder, E item) {
-    return collectionOf(builder.apply(2), item);
-  }
-
-  @SafeVarargs
-  public static <E> Set<E> toSet(IntFunction<Set<E>> builder, E item1, E... items) {
-    return collectionOf(builder.apply((int)((1 + items.length) / 0.75f) + 1), item1, items);
-  }
 
   public static <K, V> Map.Entry<K, V> pair(K key, V value) {
     return new AbstractMap.SimpleEntry<>(key, value);
   }
 
-  public static <K, V> Map<K, V> toMap(IntFunction<Map<K, V>> builder) {
-    return builder.apply(0);
+  public static <K, V> Map<K, V> mapOf() {
+    return new HashMap<>(0);
   }
 
-  public static <K, V> Map<K, V> pairTo(IntFunction<Map<K, V>> builder, K key, V value) {
-    var map = builder.apply(2);
+  public static <K, V> Map<K, V> mapOfPair(K key, V value) {
+    Map<K, V> map = new HashMap<>(2);
     map.put(key, value);
     return map;
   }
 
-  public static <K, V> Map<K, V> toMap(IntFunction<Map<K, V>> builder, Map.Entry<K, V> entry) {
-    return pairTo(builder, entry.getKey(), entry.getValue());
+  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry) {
+    Map<K, V> map = new HashMap<>(2);
+    map.put(entry.getKey(), entry.getValue());
+    return map;
   }
 
   @SafeVarargs
-  public static <K, V> Map<K, V> toMap(IntFunction<Map<K, V>> builder, Map.Entry<K, V> entry1, Map.Entry<K, V>... entries) {
-    var map = builder.apply((int)((1 + entries.length) / 0.75f) + 1);
-    map.put(entry1.getKey(), entry1.getValue());
-    for (Map.Entry<K, V> entry : entries) {
+  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V>... entries) {
+    Map<K, V> map = new HashMap<>((int)(entries.length / 0.75f) + 1);
+    for (var entry : entries) {
       map.put(entry.getKey(), entry.getValue());
     }
     return map;
@@ -178,43 +138,38 @@ public record Value<E>(E value) {
     return new ArrayList<>(0);
   }
 
-  public static <E> List<E> listOf(E item) {
-    return toList(ArrayList::new, item);
+  public static <E> List<E> listOf(E elem) {
+    List<E> list = new ArrayList<>(1);
+    list.add(elem);
+    return list;
   }
 
   @SafeVarargs
-  public static <E> List<E> listOf(E item1, E... items) {
-    return toList(ArrayList::new, item1, items);
+  public static <E> List<E> listOf(E... elems) {
+    List<E> list = new ArrayList<>(elems.length);
+    for (var elem : elems) {
+      list.add(elem);
+    }
+    return list;
   }
 
   public static <E> Set<E> setOf() {
     return new HashSet<>(0);
   }
 
-  public static <E> Set<E> setOf(E item) {
-    return toSet(HashSet::new, item);
+  public static <E> Set<E> setOf(E elem) {
+    Set<E> set = new HashSet<>(2);
+    set.add(elem);
+    return set;
   }
 
   @SafeVarargs
-  public static <E> Set<E> setOf(E item1, E... items) {
-    return toSet(HashSet::new, item1, items);
-  }
-
-  public static <K, V> Map<K, V> mapOf() {
-    return new HashMap<>(0);
-  }
-
-  public static <K, V> Map<K, V> pairTo(K key, V value) {
-    return pairTo(HashMap::new, key, value);
-  }
-
-  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry) {
-    return toMap(HashMap::new, entry);
-  }
-
-  @SafeVarargs
-  public static <K, V> Map<K, V> mapOf(Map.Entry<K, V> entry1, Map.Entry<K, V>... entries) {
-    return toMap(HashMap::new, entry1, entries);
+  public static <E>  Set<E> setOf(E... elems) {
+    Set<E> set = new HashSet<>((int)(elems.length / 0.75f) + 1);
+    for (var elem : elems) {
+      set.add(elem);
+    }
+    return set;
   }
 
 
@@ -241,6 +196,10 @@ public record Value<E>(E value) {
 
   public static Executable run(Executable fn) {
     return run(false, fn);
+  }
+
+  public static Executable run(String preset, Executable fn) {
+    return run(Objects.toString(preset, "").endsWith("!"), fn);
   }
 
   // Replace to Executable of JUnit 5
