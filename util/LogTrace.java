@@ -2,10 +2,7 @@ import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 public class LogTrace implements AutoCloseable {
   public static final String ID = "traceId";
@@ -14,7 +11,7 @@ public class LogTrace implements AutoCloseable {
 
   public LogTrace(String traceId) {
     prevId = id();
-    MDC.put(ID, traceId == null || traceId.isEmpty() ? randomString(16) : traceId);
+    MDC.put(ID, traceId == null || traceId.isEmpty() ? LogId.randomString() : traceId);
   }
 
   public LogTrace() {
@@ -67,18 +64,25 @@ public class LogTrace implements AutoCloseable {
   }
 
 
-  public static String randomString(int length, boolean secure) {
-    final var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    var sb = new StringBuilder(length);
-    var random = secure ? new SecureRandom() : ThreadLocalRandom.current();
-    for (int i = 0; i < length; i++) {
-      sb.append(chars.charAt(random.nextInt(chars.length())));
-    }
-    return sb.toString();
-  }
+  public interface LogId {
+    String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-  public static String randomString(int length) {
-    return randomString(length, false);
+    static String randomString(int length, boolean secure) {
+      var sb = new StringBuilder(length);
+      var random = secure ? new SecureRandom() : ThreadLocalRandom.current();
+      for (int i = 0; i < length; i++) {
+        sb.append(CHARS.charAt(random.nextInt(CHARS.length())));
+      }
+      return sb.toString();
+    }
+
+    static String randomString(int length) {
+      return randomString(length, false);
+    }
+
+    static String randomString() {
+      return randomString(16);
+    }
   }
 
   // replace with the real MDC
