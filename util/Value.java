@@ -202,7 +202,7 @@ public record Value<E>(E value) {
     return run(preset != null && preset.endsWith("!"), fn);
   }
 
-  // Replace to Executable of JUnit 5
+  // Replace with Executable of JUnit 5
   public interface Executable {
     void execute() throws Throwable;
   }
