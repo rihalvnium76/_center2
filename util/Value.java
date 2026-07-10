@@ -199,7 +199,7 @@ public record Value<E>(E value) {
   }
 
   public static Executable run(String preset, Executable fn) {
-    return run(Objects.toString(preset, "").endsWith("!"), fn);
+    return run(preset == null || preset.endsWith("!"), fn);
   }
 
   // Replace to Executable of JUnit 5
