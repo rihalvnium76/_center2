@@ -11,7 +11,7 @@ public class LogTrace implements AutoCloseable {
 
   public LogTrace(String traceId) {
     prevId = id();
-    MDC.put(ID, traceId == null || traceId.isEmpty() ? LogId.randomString() : traceId);
+    MDC.put(ID, traceId == null || traceId.isEmpty() ? IdUtils.randomString(16) : traceId);
   }
 
   public LogTrace() {
@@ -64,7 +64,7 @@ public class LogTrace implements AutoCloseable {
   }
 
 
-  public interface LogId {
+  public interface IdUtils {
     String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     static String randomString(int length, boolean secure) {
@@ -78,10 +78,6 @@ public class LogTrace implements AutoCloseable {
 
     static String randomString(int length) {
       return randomString(length, false);
-    }
-
-    static String randomString() {
-      return randomString(16);
     }
   }
 
