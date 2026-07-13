@@ -190,7 +190,7 @@ class FileCleaner:
         
         log.info(f"已发现 {len(files)} 个待清理文件，总计 {FileSizeUtils.format(size)}:")
 
-        files.sort(key=lambda f: f.mtime, reverse=True)
+        files.sort(key=lambda f: f.size, reverse=True)
 
         for i in range(min(10, len(files))):
             file = files[i]
