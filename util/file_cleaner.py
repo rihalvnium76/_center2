@@ -4,10 +4,10 @@ from datetime import datetime
 from genericpath import isfile
 import logging
 import os
-from os import path
 from pathlib import Path
 import sys
 import time
+from typing import Any, Callable
 
 
 class FileSizeUtils:
@@ -84,6 +84,7 @@ class Params(argparse.Namespace):
     before: float | None
     yes: bool
     color: bool
+    sort: str
 
 @dataclass
 class File:
@@ -190,7 +191,7 @@ class FileCleaner:
         
         log.info(f"已发现 {len(files)} 个待清理文件，总计 {FileSizeUtils.format(size)}:")
 
-        files.sort(key=lambda f: f.size, reverse=True)
+        files.sort(key=(lambda f: f.mtime) if args.sort == "mtime" else (lambda f: f.size), reverse=True)
 
         for i in range(min(10, len(files))):
             file = files[i]
@@ -233,6 +234,7 @@ class FileCleaner:
         p.add_argument("-b", "--before", nargs="?", type=DateTimeUtils.to_mtime, help="结束文件修改时间")
         p.add_argument("-y", "--yes", action="store_true", help="静默删除")
         p.add_argument("--no-color", action="store_false", dest="color", help="禁用控制台彩色输出")
+        p.add_argument("-s", "--sort", nargs="?", default="size", const="size", help="降序排序方式：size - 按大小；mtime - 按修改日期")
 
         return p.parse_args(namespace=Params())
     
