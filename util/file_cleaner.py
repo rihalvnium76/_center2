@@ -23,11 +23,6 @@ class FileSizeUtils:
         return f"{byte_size:.{precision}f} {unit}"
 
 class LogFormatter(logging.Formatter):
-    def format(self, record):
-        record.levelname = record.levelname[0]
-        return super().format(record)
-
-class LogFormatter(logging.Formatter):
     HEADER_COLORS = {
         "D": "\033[34m",
         "I": "\033[32m",
@@ -106,7 +101,7 @@ class File:
 
 
 class Progress:
-    interval = 2
+    interval = 5
 
     def __init__(
         self,
