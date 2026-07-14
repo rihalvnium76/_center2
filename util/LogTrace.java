@@ -1,3 +1,5 @@
+package log_trace_utils;
+
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,7 +49,7 @@ public class LogTrace implements AutoCloseable {
   }
 
   public static String tag(String tagName) {
-    return "[" + tagName + " " + id() + "]";
+    return "[" + id() + " " + tagName + "]";
   }
 
   public static void setup(HttpServletResponse response) {
