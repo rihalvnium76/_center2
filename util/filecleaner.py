@@ -57,7 +57,7 @@ def build_logger():
     handler.setFormatter(formatter)
     logger = logging.getLogger(__name__)
     logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     return logger
 
 log = build_logger()
@@ -77,6 +77,10 @@ class DateTimeUtils:
                 return datetime.strptime(v, pattern).timestamp()
             except ValueError:
                 pass
+    
+    @staticmethod
+    def to_iso(v: float | None):
+        return None if v is None else datetime.fromtimestamp(v).strftime("%Y-%m-%d %H:%M:%S")
 
 class Params(argparse.Namespace):
     dir: str
@@ -102,17 +106,12 @@ class File:
 
 
 class Progress:
-    interval = 5
+    INTERVAL = 5
 
-    def __init__(
-        self,
-        total_count = 0,
-        name = "",
-    ):
+    def __init__(self, total_count = 0):
         self.total_count = f"/{total_count}" if total_count else ""
-        self.name = f"- ({name}) " if name else "- "
 
-        self.unmodified = True
+        self.unmodified = False
         self.acc_count = 0
 
         self.last_time = time.monotonic()
@@ -124,7 +123,7 @@ class Progress:
             return
         
         elapsed_time = (now := time.monotonic()) - self.last_time
-        if check_interval and elapsed_time < self.interval:
+        if check_interval and elapsed_time < self.INTERVAL:
             return
         
         self.unmodified = True
@@ -139,7 +138,7 @@ class Progress:
         else:
             size_per_sec = ""
         
-        log.info(f"{self.name}已处理: {self.acc_count}{self.total_count} 项 ({count_per_sec:.1f} 项/秒{size_per_sec})")
+        log.info(f"- 已处理: {self.acc_count}{self.total_count} 项 ({count_per_sec:.1f} 项/秒{size_per_sec})")
     
     def stat(self, size: int):
         self.unmodified = False
@@ -195,7 +194,7 @@ class FileCleaner:
 
         for i in range(min(10, len(files))):
             file = files[i]
-            log.info(f"- {file.path} ({FileSizeUtils.format(file.size)}, {datetime.fromtimestamp(file.mtime).strftime("%Y-%m-%d %H:%M:%S")})")
+            log.info(f"- {file.path} ({FileSizeUtils.format(file.size)}, {DateTimeUtils.to_iso(file.mtime)})")
 
         if files and (args.yes or input(">>> 是否清理文件？[Y/N] ").lower() == "y"):
             return files
@@ -209,44 +208,63 @@ class FileCleaner:
         
         log.info("正在删除文件 ...")
 
-        size = 0
+        success_size = 0
+        failed_count = 0
         with Progress(total_count=len(files)) as p:
             for file in files:
                 try:
                     os.remove(file.path)
-                    # log.debug(f"- {file.path}")
-                    size += file.size
+                    # log.debug(f"* {file.path}")
+                    success_size += file.size
                     p.stat_file(file)
                 except FileNotFoundError:
-                    pass
+                    log.warning(f"! 文件不存在 {file.path}")
+                    failed_count += 1
                 except Exception as e:
-                    log.warning(f"- 无法删除 {file.path}: {e}")
+                    log.warning(f"! 无法删除 {file.path}: {e}")
+                    failed_count += 1
+            
+            success_count = p.acc_count
         
-        log.info(f"已清理 {len(files)} 个文件，总计 {FileSizeUtils.format(size)}")
+        log.info(f"已清理 {success_count} 个文件，总计 {FileSizeUtils.format(success_size)}")
+        log.info(f"已跳过 {failed_count} 个清理失败的文件")
 
     @staticmethod
     def parse_args():
-        cwd = os.getcwd()
-
-        p = argparse.ArgumentParser(description="文件按日期批量清理")
-        p.add_argument("-d", "--dir", nargs="?", default=cwd, const=cwd, help="扫描目录")
-        p.add_argument("-a", "--after", nargs="?", type=DateTimeUtils.to_mtime, help="起始文件修改时间")
-        p.add_argument("-b", "--before", nargs="?", type=DateTimeUtils.to_mtime, help="结束文件修改时间")
+        p = argparse.ArgumentParser(
+            description="文件按日期批量清理",
+            formatter_class=argparse.RawTextHelpFormatter
+        )
+        p.add_argument("-d", "--dir", default=os.getcwd(), help="扫描目录")
+        p.add_argument("-a", "--after",  type=DateTimeUtils.to_mtime, help="起始文件修改时间")
+        p.add_argument("-b", "--before", type=DateTimeUtils.to_mtime, help="结束文件修改时间")
         p.add_argument("-y", "--yes", action="store_true", help="静默删除")
+        p.add_argument("-s", "--sort", choices=["size", "mtime"], default="size", help="降序排序方式\n- size: 按大小（默认）\n- mtime: 按修改日期")
         p.add_argument("--no-color", action="store_false", dest="color", help="禁用控制台彩色输出")
-        p.add_argument("-s", "--sort", nargs="?", default="size", const="size", help="降序排序方式：size - 按大小；mtime - 按修改日期")
+
+        if len(sys.argv) == 1:
+            p.print_help()
+            sys.exit(0)
 
         return p.parse_args(namespace=Params())
+    
+    @staticmethod
+    def print_args(args: Params):
+        log.debug(f"入参: {args}")
+
+        log.info("扫描参数：")
+        log.info(f"- 起始目录: {args.dir}")
+        log.info(f"- 起始修改时间: {DateTimeUtils.to_iso(args.after)}")
+        log.info(f"- 结束修改时间: {DateTimeUtils.to_iso(args.before)}")
+
+        if args.after is None and args.before is None:
+            log.warning("【警告】起始日期和结束日期同时为空，将选择全部文件")
     
     @classmethod
     def run(cls):
         args = cls.parse_args()
         LogFormatter.color_output = args.color
-        log.debug(f"入参: {args}")
-
-        if args.after is None and args.before is None:
-            log.error("起始日期和结束日期不能同时为空")
-            sys.exit(1)
+        cls.print_args(args)
 
         files = cls.scan_files(args)
         cls.remove_files(files)
