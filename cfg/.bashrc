@@ -33,8 +33,8 @@ _set_ps1() {
     local raw_exit_code=$?
 
     local start_time=$_cmd_start_time
-    unset _cmd_start_time
     local end_time=$EPOCHREALTIME
+    unset _cmd_start_time
     local elapsed_time=""
     if [[ -n $start_time ]]; then
         elapsed_time=$(( ${end_time/.} - ${start_time/.} ))
@@ -51,14 +51,16 @@ _set_ps1() {
 
     local ip=$(ip route | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}')
     # ip=" ${ip:--}"
-    [[ -n $ip ]] && ip=" ${ip}"
+    if [[ -n $ip ]]; then
+        [[ -v TMUX ]] && tmux set-environment LOCAL_IP "${ip}"
+
+        ip=" ${ip}"
+    fi
 
     local git_ps="$(__git_ps1 '%s' 2>/dev/null)"
     [[ -n $git_ps ]] && git_ps=" \[\e[36m\](${git_ps})\[\e[97m\]"
 
     PS1="\n\[\e[97m\][\[\e[32m\]\w\[\e[97m\] \t \u${ip}${exit_code}${elapsed_time}${git_ps}]\n\$\[\e[0m\] "
-
-    [[ -v TMUX ]] && tmux set-environment LOCAL_IP "${ip// /}"
 
     return $raw_exit_code
 }
