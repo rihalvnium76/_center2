@@ -32,7 +32,6 @@ _set_ps1() {
     # MUST be at the start
     local raw_exit_code=$?
     local start_time=$_cmd_start_time
-    unset _cmd_start_time
     local end_time=$EPOCHREALTIME
 
     local elapsed_time=""
