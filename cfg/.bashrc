@@ -31,13 +31,18 @@ unset -f _setup_git_prompt
 _set_ps1() {
     # MUST be at the start
     local raw_exit_code=$?
+    local start_time=$_cmd_start_time
+    unset _cmd_start_time
     local end_time=$EPOCHREALTIME
 
-    local elapsed_time=$(( ${end_time/.} - ${_cmd_start_time/.} ))
-    if (( elapsed_time >= 10000 )); then
-        elapsed_time=" $(( elapsed_time / 1000000 )).$(( (elapsed_time % 1000000) / 10000 ))s"
-    else
-        elapsed_time=""
+    local elapsed_time=""
+    if [[ -n $start_time ]]; then
+        elapsed_time=$(( ${end_time/.} - ${start_time/.} ))
+        if (( elapsed_time >= 10000 )); then
+            elapsed_time=" $(( elapsed_time / 1000000 )).$(( (elapsed_time % 1000000) / 10000 ))s"
+        else
+            elapsed_time=""
+        fi
     fi
 
     local exit_code=""
@@ -52,9 +57,7 @@ _set_ps1() {
 
     PS1="\n\[\e[97m\][\[\e[32m\]\w\[\e[97m\] \t \u${ip}${exit_code}${elapsed_time}${git_ps}]\n\$\[\e[0m\] "
 
-    [[ -v TMUX ]] && tmux set-environment LOCAL_IP "${ip}"
-    
-    unset _cmd_start_time
+    [[ -v TMUX ]] && tmux set-environment LOCAL_IP "${ip// /}"
 
     return $raw_exit_code
 }
@@ -82,6 +85,6 @@ if [[ ! -v NO_TMUX && $- == *i* && -v SSH_CONNECTION ]] && command -v tmux >/dev
 fi
 
 _pre_exec() {
-    [[ ! -v _cmd_start_time ]] && _cmd_start_time=$EPOCHREALTIME
+    [[ $BASH_COMMAND != "_set_ps1" ]] && _cmd_start_time=$EPOCHREALTIME
 }
 trap '_pre_exec' DEBUG
