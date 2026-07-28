@@ -85,12 +85,11 @@ if [[ ! -v NO_TMUX && $- == *i* && -v SSH_CONNECTION ]] && command -v tmux >/dev
     fi
 fi
 
-_pre_exec() {
+_set_cmd_start_time() {
     local cmd
-    local set_cmd_start_time=1
     for cmd in "${PROMPT_COMMAND[@]}"; do
-        [[ "$BASH_COMMAND" == "$cmd" ]] && set_cmd_start_time=0
+        [[ "$BASH_COMMAND" == "$cmd" ]] && return
     done
-    (( $set_cmd_start_time )) && _cmd_start_time=$EPOCHREALTIME
+    _cmd_start_time=$EPOCHREALTIME
 }
-trap '_pre_exec' DEBUG
+trap '_set_cmd_start_time' DEBUG
