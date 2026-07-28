@@ -31,9 +31,10 @@ unset -f _setup_git_prompt
 _set_ps1() {
     # MUST be at the start
     local raw_exit_code=$?
-    local start_time=$_cmd_start_time
-    local end_time=$EPOCHREALTIME
 
+    local start_time=$_cmd_start_time
+    unset _cmd_start_time
+    local end_time=$EPOCHREALTIME
     local elapsed_time=""
     if [[ -n $start_time ]]; then
         elapsed_time=$(( ${end_time/.} - ${start_time/.} ))
@@ -84,6 +85,11 @@ if [[ ! -v NO_TMUX && $- == *i* && -v SSH_CONNECTION ]] && command -v tmux >/dev
 fi
 
 _pre_exec() {
-    [[ $BASH_COMMAND != "_set_ps1" ]] && _cmd_start_time=$EPOCHREALTIME
+    local cmd
+    local set_cmd_start_time=1
+    for cmd in "${PROMPT_COMMAND[@]}"; do
+        [[ "$BASH_COMMAND" == "$cmd" ]] && set_cmd_start_time=0
+    done
+    (( $set_cmd_start_time )) && _cmd_start_time=$EPOCHREALTIME
 }
 trap '_pre_exec' DEBUG
