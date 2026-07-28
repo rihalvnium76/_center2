@@ -39,7 +39,8 @@ _set_ps1() {
     if [[ -n $start_time ]]; then
         elapsed_time=$(( ${end_time/.} - ${start_time/.} ))
         if (( elapsed_time >= 10000 )); then
-            elapsed_time=" $(( elapsed_time / 1000000 )).$(( (elapsed_time % 1000000) / 10000 ))s"
+            local float=$(( (elapsed_time % 1000000 + 1000000) / 10000 ))
+            elapsed_time=" $(( elapsed_time / 1000000 )).${float:1}s"
         else
             elapsed_time=""
         fi
