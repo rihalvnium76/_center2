@@ -32,15 +32,15 @@ _set_ps1() {
     # MUST be at the start
     local raw_exit_code=$?
 
-    local start_time=$_cmd_start_time
     local end_time=$EPOCHREALTIME
+    local start_time=$_cmd_start_time
     unset _cmd_start_time
     local elapsed_time=""
     if [[ -n $start_time ]]; then
         elapsed_time=$(( ${end_time/.} - ${start_time/.} ))
         if (( elapsed_time >= 10000 )); then
-            local rounded=$(( (elapsed_time + 5000) / 10000 ))
-            printf -v elapsed_time " %d.%02ds" "$(( rounded / 100 ))" "$(( rounded % 100 ))"
+            local half_even=$(( (elapsed_time + 4999 + elapsed_time / 10000 % 2) / 10000 ))
+            printf -v elapsed_time " %d.%02ds" "$(( half_even / 100 ))" "$(( half_even % 100 ))"
         else
             elapsed_time=""
         fi
