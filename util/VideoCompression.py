@@ -4,9 +4,9 @@ import subprocess
 import os
 
 # --- use lastest ffmpeg ---
-#ffmpeg -hide_banner -i "<source_file>" -c:v libx264 -preset veryslow -crf 23 -refs 6 -bf 6 -g 600 -keyint_min 1 -sc_threshold 60 -deblock 1:1 -qcomp 0.5 -psy-rd 0.4:0 -aq-mode 3 -aq-strength 0.8 -me_method 3 -c:a aac -ar 44100 -b:a 128k "<output_file>"
-#ffmpeg -hide_banner -i "<source_file>" -c:v libx264 -preset veryslow -crf 23 -refs 6 -bf 6 -g 600 -keyint_min 1 -sc_threshold 60 -deblock 1:1 -qcomp 0.5 -psy-rd 0.4:0 -aq-mode 3 -aq-strength 0.8 -me_method 3 -c:a copy "<output_file>"
-##x264 --crf 23 --preset veryslow -r 6 -b 6 -I 600 -i 1 --scenecut 60 -f 1:1 --qcomp 0.5 --psy-rd 0.4:0 --aq-mode 3 --aq-strength 0.8 --me esa -o "<output_file>" "<source_file>"
+#ffmpeg -hide_banner -i "<source_file>" -c:v libx264 -preset veryslow -crf 23 -refs 6 -bf 6 -g 600 -keyint_min 1 -sc_threshold 60 -deblock 1:1 -qcomp 0.5 -psy-rd 0.4:0 -aq-mode 3 -aq-strength 0.8 -me_method 4 -c:a aac -ar 44100 -b:a 128k "<output_file>"
+#ffmpeg -hide_banner -i "<source_file>" -c:v libx264 -preset veryslow -crf 23 -refs 6 -bf 6 -g 600 -keyint_min 1 -sc_threshold 60 -deblock 1:1 -qcomp 0.5 -psy-rd 0.4:0 -aq-mode 3 -aq-strength 0.8 -me_method 4 -c:a copy "<output_file>"
+##x264 --crf 23 --preset veryslow -r 6 -b 6 -I 600 -i 1 --scenecut 60 -f 1:1 --qcomp 0.5 --psy-rd 0.4:0 --aq-mode 3 --aq-strength 0.8 --me tesa -o "<output_file>" "<source_file>"
 
 # --- experimental ---
 # -c:v hevc -x265-params range=full -dst_range 1
