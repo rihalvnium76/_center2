@@ -68,7 +68,7 @@ PROMPT_COMMAND='_set_ps1'
 
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
-alias ll='ls -lA --time-style iso'
+alias ll='ls -lAh --time-style iso'
 alias which='command -v'
 alias py='python3'
 
