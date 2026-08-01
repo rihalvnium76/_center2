@@ -1,8 +1,8 @@
-# export LANG=zh_CN.UTF-8
-# export LANGUAGE=zh_CN:zh
-
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
+
+# export LANG=zh_CN.UTF-8
+# export LANGUAGE=zh_CN:zh
 
 _setup_git_prompt() {
     local git_prompt_file="$HOME/.git-prompt.sh"
