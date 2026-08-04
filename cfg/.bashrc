@@ -33,8 +33,8 @@ shrc_set_ps1() {
     local raw_exit_code=$?
 
     local end_time=$EPOCHREALTIME
-    local start_time=$_cmd_start_time
-    unset _cmd_start_time
+    local start_time=$shrc_cmd_start_time
+    unset shrc_cmd_start_time
     local elapsed_time=""
     if [[ -n $start_time ]]; then
         elapsed_time=$(( ${end_time/.} - ${start_time/.} ))
@@ -90,7 +90,7 @@ shrc_set_cmd_start_time() {
     for cmd in "${PROMPT_COMMAND[@]}"; do
         [[ "$BASH_COMMAND" == "$cmd" ]] && return $exit_code
     done
-    _cmd_start_time=$EPOCHREALTIME
+    shrc_cmd_start_time=$EPOCHREALTIME
     return $exit_code
 }
 trap 'shrc_set_cmd_start_time' DEBUG
