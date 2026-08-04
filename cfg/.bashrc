@@ -1,10 +1,10 @@
 # If not running interactively, don't do anything
 [[ $- != *i* ]] && return
 
-# export LANG=zh_CN.UTF-8
-# export LANGUAGE=zh_CN:zh
+export LANG=zh_CN.UTF-8
+export LANGUAGE=zh_CN:zh
 
-_setup_git_prompt() {
+shrc_setup_git_prompt() {
     local git_prompt_file="$HOME/.git-prompt.sh"
 
     if [[ ! -f $git_prompt_file ]]; then
@@ -25,10 +25,10 @@ _setup_git_prompt() {
         . "$git_prompt_file"
     fi
 }
-_setup_git_prompt
-unset -f _setup_git_prompt
+shrc_setup_git_prompt
+unset -f shrc_setup_git_prompt
 
-_set_ps1() {
+shrc_set_ps1() {
     # MUST be at the start
     local raw_exit_code=$?
 
@@ -64,7 +64,7 @@ _set_ps1() {
 
     return $raw_exit_code
 }
-PROMPT_COMMAND='_set_ps1'
+PROMPT_COMMAND='shrc_set_ps1'
 
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
@@ -72,26 +72,25 @@ alias ll='ls -lAh --time-style iso'
 alias which='command -v'
 alias py='python3'
 
-alias findsamefile='python3 /sdcard/ATr2/code/own/findSameFile.py'
-alias filecleaner='python3 /sdcard/ATr2/code/own/filecleaner.py'
-
 if [ -t 0 ]; then
     export GPG_TTY=$(tty)
 fi
 
-if [[ ! -v NO_TMUX && $- == *i* && -v SSH_CONNECTION ]] && command -v tmux >/dev/null 2>&1; then
+if [[ ! -v SHRC_NO_TMUX && $- == *i* && -v SSH_CONNECTION ]] && command -v tmux >/dev/null 2>&1; then
     if [[ ! -v TMUX ]]; then
-        exec tmux new-session -A -s 0
+        exec tmux new-session -A -s ${SHRC_TMUX_SES:-0}
     else
-        alias rescue="exec tmux detach -E 'NO_TMUX=1 exec bash'"
+        alias rescue="exec tmux detach -E 'SHRC_NO_TMUX=1 exec bash'"
     fi
 fi
 
-_set_cmd_start_time() {
+shrc_set_cmd_start_time() {
+    local exit_code=$?
     local cmd
     for cmd in "${PROMPT_COMMAND[@]}"; do
-        [[ "$BASH_COMMAND" == "$cmd" ]] && return
+        [[ "$BASH_COMMAND" == "$cmd" ]] && return $exit_code
     done
     _cmd_start_time=$EPOCHREALTIME
+    return $exit_code
 }
-trap '_set_cmd_start_time' DEBUG
+trap 'shrc_set_cmd_start_time' DEBUG
