@@ -103,10 +103,10 @@ class Downloader:
         n = len(cls.tasks)
         for i, task in enumerate(cls.tasks):
             i += 1
-            log.info(f"Fetching {task.url} ...", extra={"ext_info": f"{task.source_name} {i}/{n}"})
+            log.info(f"Fetching {task.url} ...", extra={"ext_info": f"{i}/{n} {task.source_name}"})
             cls.call_core(task)
 
-            task.format_id = ConsoleUtils.input(f"({i}/{n}) Enter format ID (xx+xx, skip empty):")
+            task.format_id = ConsoleUtils.input(f"({i}/{n} {task.source_name}) Enter format ID (xx+xx, skip empty):")
 
     @classmethod
     def download(cls):
@@ -114,10 +114,10 @@ class Downloader:
         for i, task in enumerate(cls.tasks):
             i += 1
             if task.format_id:
-                log.info(f"Downloading {task.url} ...", extra={"ext_info": f"{task.source_name} {i}/{n}"})
+                log.info(f"Downloading {task.url} ...", extra={"ext_info": f"{i}/{n} {task.source_name}"})
                 cls.call_core(task)
             else:
-                log.info(f"Skipped {task.url} : Empty format ID", extra={"ext_info": f"{task.source_name} {i}/{n}"})
+                log.info(f"Skipped {task.url} : Empty format ID", extra={"ext_info": f"{i}/{n} {task.source_name}"})
 
     @staticmethod
     def complete():
