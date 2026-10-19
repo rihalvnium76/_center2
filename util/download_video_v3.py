@@ -2,6 +2,7 @@ import argparse
 from dataclasses import dataclass
 import logging
 import subprocess
+import os
 
 YT_DLP_EXEC = "yt-dlp"
 YTB_COOKIES = "cookie_ytb.txt"
@@ -78,13 +79,18 @@ class DownloadTask:
 
 class Downloader:
     tasks: list[DownloadTask] = []
+    cwd: str = os.getcwd()
 
     @classmethod
     def add_task(cls, task: DownloadTask):
         cls.tasks.append(task)
 
-    @staticmethod
-    def call_core(task: DownloadTask):
+    @classmethod
+    def clear_tasks(cls):
+        cls.tasks.clear()
+
+    @classmethod
+    def call_core(cls, task: DownloadTask):
         args = [
             YT_DLP_EXEC,
             *(["-f", task.format_id] if task.format_id else ["-F"]),
@@ -95,7 +101,7 @@ class Downloader:
             *(["-o", "%(uploader)s/%(id)s_%(title)s.%(ext)s"] if task.format_id else []),
             task.url
         ]
-        subprocess.run(args)
+        subprocess.run(args, cwd=cls.cwd)
         # print(args)
 
     @classmethod
@@ -166,6 +172,8 @@ class App:
 
     @staticmethod
     def add_tasks():
+        Downloader.cwd = r"D:\a"
+        
         # DownloadTaskAdder.ytb("xxxxxxxxx")
         DownloadTaskAdder.bili("BVxxxxxxxx")
 
