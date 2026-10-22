@@ -18,12 +18,15 @@ def avoid_none[T](v: list[T] | None) -> list[T]:
     return v if v is not None else []
 
 def generate_args_list(lyre_args: list[str] | None, horn_args: list[str] | Literal[True] | None):
-    lyre_args = avoid_none(lyre_args)
+    args_list = []
 
-    return [
-        [*lyre_args, "--midi"],
-        ["--horn", *(lyre_args if horn_args is True else avoid_none(horn_args)), "--midi"]
-    ]
+    if lyre_args is not None:
+        args_list.append([*lyre_args, "--midi"])
+    
+    if horn_args is not None:
+        args_list.append(["--horn", *(avoid_none(lyre_args) if horn_args is True else horn_args), "--midi"])
+
+    return args_list
 
 def main():
     hold = "--hold"
