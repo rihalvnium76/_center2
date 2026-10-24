@@ -81,6 +81,7 @@ class DownloadTask:
 
 class Downloader:
     tasks: list[DownloadTask] = []
+    verbose_output = False
 
     @classmethod
     def add_task(cls, task: DownloadTask):
@@ -90,6 +91,7 @@ class Downloader:
     def call_core(cls, task: DownloadTask):
         args = [
             YT_DLP_EXEC,
+            *(["-v"] if cls.verbose_output else []),
             *(["-f", task.format_id] if task.format_id else ["-F"]),
             "--js-runtimes", "node",
             "--cookies", task.cookies,
@@ -174,17 +176,19 @@ class App:
             formatter_class=argparse.RawTextHelpFormatter
         )
 
+        p.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Print various debugging information")
         p.add_argument("--no-color", action="store_false", dest="color", help="Disable console color output")
 
         args = p.parse_args()
 
         ConsoleUtils.color_output = args.color
+        Downloader.verbose_output = args.verbose
 
     @staticmethod
     def add_tasks():
         with DownloadTaskAdder(r"D:\video") as a:
-            a.ytb("xxxxxxxxxxx")
-            a.bili("BVxxxxxxxxx")
+            a.ytb("xxx")
+            a.bili("BVxxx")
 
     @classmethod
     def main(cls):
