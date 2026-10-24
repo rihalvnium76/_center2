@@ -1,6 +1,7 @@
 import argparse
 from dataclasses import dataclass
 import logging
+import shlex
 import subprocess
 import os
 
@@ -64,7 +65,7 @@ def build_logger():
     handler.setFormatter(formatter)
     logger = logging.getLogger(__name__)
     logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     return logger
 
 log = build_logger()
@@ -76,18 +77,14 @@ class DownloadTask:
     cookies: str
     proxy: str
     url: str
+    cwd: str
 
 class Downloader:
     tasks: list[DownloadTask] = []
-    cwd: str = os.getcwd()
 
     @classmethod
     def add_task(cls, task: DownloadTask):
         cls.tasks.append(task)
-
-    @classmethod
-    def clear_tasks(cls):
-        cls.tasks.clear()
 
     @classmethod
     def call_core(cls, task: DownloadTask):
@@ -101,29 +98,33 @@ class Downloader:
             *(["-o", "%(uploader)s/%(id)s_%(title)s.%(ext)s"] if task.format_id else []),
             task.url
         ]
-        subprocess.run(args, cwd=cls.cwd)
-        # print(args)
+        subprocess.run(args, cwd=task.cwd)
+        # log.debug(f"{task.cwd} $ {shlex.join(args)}", extra={"ext_info": "core (dry)"})
 
     @classmethod
     def fetch_metadata(cls):
         n = len(cls.tasks)
         for i, task in enumerate(cls.tasks):
             i += 1
-            log.info(f"Fetching {task.url} ...", extra={"ext_info": f"{i}/{n} {task.source_name}"})
+            prompt_header = f"{i}/{n} {task.source_name}"
+
+            log.info(f"Fetching {task.url} ...", extra={"ext_info": prompt_header})
             cls.call_core(task)
 
-            task.format_id = ConsoleUtils.input(f"({i}/{n} {task.source_name}) Enter format ID (xx+xx, skip empty):")
+            task.format_id = ConsoleUtils.input(f"({prompt_header}) Enter format ID (xx+xx, skip empty):")
 
     @classmethod
     def download(cls):
         n = len(cls.tasks)
         for i, task in enumerate(cls.tasks):
             i += 1
+            prompt_header = f"{i}/{n} {task.source_name}"
+
             if task.format_id:
-                log.info(f"Downloading {task.url} ...", extra={"ext_info": f"{i}/{n} {task.source_name}"})
+                log.info(f"Downloading {task.url} ...", extra={"ext_info": prompt_header})
                 cls.call_core(task)
             else:
-                log.info(f"Skipped {task.url} : Empty format ID", extra={"ext_info": f"{i}/{n} {task.source_name}"})
+                log.info(f"Skipped {task.url} : Empty format ID", extra={"ext_info": prompt_header})
 
     @staticmethod
     def complete():
@@ -132,28 +133,37 @@ class Downloader:
         ConsoleUtils.input("Press enter to exit ...")
 
 class DownloadTaskAdder:
+    def __init__(self, cwd = ""):
+        self.cwd = cwd or os.getcwd()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        pass
+
     @staticmethod
     def get_url(template: str, id: str):
         return template.format(id=id) if not id.startswith("http") else id
     
-    @classmethod
-    def ytb(cls, id: str):
+    def ytb(self, id: str):
         Downloader.add_task(DownloadTask(
             source_name="ytb",
             format_id="",
             cookies=YTB_COOKIES,
             proxy=PROXY,
-            url=cls.get_url("https://www.youtube.com/watch?v={id}", id)
+            url=self.get_url("https://www.youtube.com/watch?v={id}", id),
+            cwd=self.cwd,
         ))
 
-    @classmethod
-    def bili(cls, id: str):
+    def bili(self, id: str):
         Downloader.add_task(DownloadTask(
             source_name="bili",
             format_id="",
             cookies=BILI_COOKIES,
             proxy="",
-            url=cls.get_url("https://www.bilibili.com/video/{id}", id)
+            url=self.get_url("https://www.bilibili.com/video/{id}", id),
+            cwd=self.cwd,
         ))
 
 class App:
@@ -172,10 +182,9 @@ class App:
 
     @staticmethod
     def add_tasks():
-        Downloader.cwd = r"D:\a"
-        
-        # DownloadTaskAdder.ytb("xxxxxxxxx")
-        DownloadTaskAdder.bili("BVxxxxxxxx")
+        with DownloadTaskAdder(r"D:\video") as a:
+            a.ytb("xxxxxxxxxxx")
+            a.bili("BVxxxxxxxxx")
 
     @classmethod
     def main(cls):
