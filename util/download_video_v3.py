@@ -1,13 +1,16 @@
 import argparse
 from dataclasses import dataclass
 import logging
+import random
 import shlex
 import subprocess
 import os
+import time
 
-YT_DLP_EXEC = "yt-dlp"
-YTB_COOKIES = "cookie_ytb.txt"
-BILI_COOKIES = "cookie_bili.txt"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+YT_DLP_EXEC = os.path.join(SCRIPT_DIR, "yt-dlp.exe")
+YTB_COOKIES = os.path.join(SCRIPT_DIR, "cookie_ytb.txt")
+BILI_COOKIES = os.path.join(SCRIPT_DIR, "cookie_bili.txt")
 PROXY = "socks5://127.0.0.1:xxxx/"
 
 class ConsoleUtils:
@@ -77,11 +80,12 @@ class DownloadTask:
     cookies: str
     proxy: str
     url: str
-    cwd: str
+    dir: str
 
 class Downloader:
     tasks: list[DownloadTask] = []
     verbose_output = False
+    failed_tasks: list[DownloadTask] = []
 
     @classmethod
     def add_task(cls, task: DownloadTask):
@@ -97,11 +101,21 @@ class Downloader:
             "--cookies", task.cookies,
             *(["--proxy", task.proxy] if task.proxy else []),
             *([] if ConsoleUtils.color_output else ["--color", "no_color"]),
-            *(["-o", "%(uploader)s/%(id)s_%(title)s.%(ext)s"] if task.format_id else []),
+            *(["-o", os.path.join(os.path.abspath(task.dir), "%(uploader)s", "%(id)s_%(title)s.%(ext)s")] if task.format_id else []),
             task.url
         ]
-        subprocess.run(args, cwd=task.cwd)
-        # log.debug(f"{task.cwd} $ {shlex.join(args)}", extra={"ext_info": "core (dry)"})
+        return subprocess.run(args).returncode
+        # log.debug(f"$ {shlex.join(args)}", extra={"ext_info": "core (dry)"}); return 0
+
+    @staticmethod
+    def delay(enabled = True, prompt_header = ""):
+        if not enabled:
+            return
+        
+        # delay_sec = random.randint(10, 50) / 10
+        delay_sec = 1
+        log.info(f"Waiting for {delay_sec} second(s) ...", extra={"ext_info": prompt_header})
+        time.sleep(delay_sec)
 
     @classmethod
     def fetch_metadata(cls):
@@ -111,9 +125,10 @@ class Downloader:
             prompt_header = f"{i}/{n} {task.source_name}"
 
             log.info(f"Fetching {task.url} ...", extra={"ext_info": prompt_header})
-            cls.call_core(task)
-
-            task.format_id = ConsoleUtils.input(f"({prompt_header}) Enter format ID (xx+xx, skip empty):")
+            if cls.call_core(task):
+                cls.failed_tasks.append(task)
+            else:
+                task.format_id = ConsoleUtils.input(f"({prompt_header}) Enter format ID (xx+xx, skip empty):")
 
     @classmethod
     def download(cls):
@@ -123,20 +138,26 @@ class Downloader:
             prompt_header = f"{i}/{n} {task.source_name}"
 
             if task.format_id:
+                cls.delay(i != 1, prompt_header)
                 log.info(f"Downloading {task.url} ...", extra={"ext_info": prompt_header})
-                cls.call_core(task)
+                if cls.call_core(task):
+                    cls.failed_tasks.append(task)
             else:
                 log.info(f"Skipped {task.url} : Empty format ID", extra={"ext_info": prompt_header})
 
-    @staticmethod
-    def complete():
+    @classmethod
+    def complete(cls):
         log.info(f"")
-        log.info(f"Completed")
+        if cls.failed_tasks:
+            log.error("Failed tasks:\n" + "\n".join([f"{i + 1}: {task.url}" for i, task in enumerate(cls.failed_tasks)]))
+        else:
+            log.info(f"Completed")
+        
         ConsoleUtils.input("Press enter to exit ...")
 
 class DownloadTaskAdder:
-    def __init__(self, cwd = ""):
-        self.cwd = cwd or os.getcwd()
+    def __init__(self, dir = ""):
+        self.dir = dir or os.getcwd()
 
     def __enter__(self):
         return self
@@ -155,7 +176,7 @@ class DownloadTaskAdder:
             cookies=YTB_COOKIES,
             proxy=PROXY,
             url=self.get_url("https://www.youtube.com/watch?v={id}", id),
-            cwd=self.cwd,
+            dir=self.dir,
         ))
 
     def bili(self, id: str):
@@ -165,7 +186,7 @@ class DownloadTaskAdder:
             cookies=BILI_COOKIES,
             proxy="",
             url=self.get_url("https://www.bilibili.com/video/{id}", id),
-            cwd=self.cwd,
+            dir=self.dir,
         ))
 
 class App:
@@ -186,8 +207,8 @@ class App:
 
     @staticmethod
     def add_tasks():
-        with DownloadTaskAdder(r"D:\video") as a:
-            a.ytb("xxx")
+        with DownloadTaskAdder(r"F:\AVideo\bdvideo") as a:
+            # a.ytb("xxx")
             a.bili("BVxxx")
 
     @classmethod
