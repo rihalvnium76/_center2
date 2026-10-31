@@ -239,7 +239,7 @@ class FileCleaner:
         p.add_argument("-a", "--after",  type=DateTimeUtils.to_mtime, help="起始文件修改时间")
         p.add_argument("-b", "--before", type=DateTimeUtils.to_mtime, help="结束文件修改时间")
         p.add_argument("-y", "--yes", action="store_true", help="静默删除")
-        p.add_argument("-s", "--sort", choices=["size", "mtime"], default="size", help="降序排序方式\n- size: 按大小（默认）\n- mtime: 按修改日期")
+        p.add_argument("-s", "--sort", choices=["size", "mtime"], default="mtime", help="降序排序方式\n- size: 按大小\n- mtime: 按修改日期（默认）")
         p.add_argument("--no-color", action="store_false", dest="color", help="禁用控制台彩色输出")
 
         if len(sys.argv) == 1:
