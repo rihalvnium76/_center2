@@ -16,7 +16,7 @@ class Generator:
 
     @staticmethod
     def print_rules(paths: Iterable[str], access_policy: PathAccessPolicy, sep = True):
-        for p in paths:
+        for p in sorted(paths):
             print(f"{access_policy.value}={p}{os.sep if sep and os.path.isdir(p) else ""}")
 
     @classmethod
