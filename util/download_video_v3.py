@@ -88,7 +88,6 @@ class Downloader:
     failed_tasks: list[DownloadTask] = []
     random_interval = False
     force_ipv4 = False
-    force_ipv6 = False
 
     @classmethod
     def add_task(cls, task: DownloadTask):
@@ -105,14 +104,15 @@ class Downloader:
             *(["--proxy", task.proxy] if task.proxy else []),
             *([] if ConsoleUtils.color_output else ["--color", "no_color"]),
             *(["-4"] if cls.force_ipv4 else []),
-            *(["-6"] if cls.force_ipv6 else []),
             *(["-o", os.path.join(os.path.abspath(task.dir), "%(uploader)s", "%(id)s_%(title)s.%(ext)s")] if task.format_id else []),
             task.url
         ]
+        
         if cls.verbose_output:
             log.debug(f"$ {shlex.join(args)}", extra={"ext_info": "core (dry)"})
+        
         return subprocess.run(args).returncode
-        # log.debug(f"$ {shlex.join(args)}", extra={"ext_info": "core (dry)"}); return 0
+        # return 0
 
     @classmethod
     def delay(cls, enabled = True, prompt_header = ""):
@@ -211,7 +211,6 @@ class App:
         p.add_argument("--no-color", action="store_false", dest="color", help="Disable console color output")
         p.add_argument("-r", "--random-interval", action="store_true", dest="random_interval", help="Set download interval to [1.0, 5.0] seconds")
         p.add_argument("-4", "--force-ipv4", action="store_true", dest="force_ipv4", help="Make all connections via IPv4 (Use when stuck in the Downloading Webpage stage for an extended period of time)")
-        p.add_argument("-6", "--force-ipv6", action="store_true", dest="force_ipv6", help="Make all connections via IPv6 (Use when stuck in the Downloading Webpage stage for an extended period of time)")
 
         args = p.parse_args()
 
@@ -219,7 +218,6 @@ class App:
         Downloader.verbose_output = args.verbose
         Downloader.random_interval = args.random_interval
         Downloader.force_ipv4 = args.force_ipv4
-        Downloader.force_ipv6 = args.force_ipv6
 
     @staticmethod
     def add_tasks():
